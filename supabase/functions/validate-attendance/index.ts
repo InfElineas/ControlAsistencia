@@ -3,6 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 interface ValidationRequest {
@@ -70,7 +72,10 @@ async function hasReachedCheckoutTime(
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders,
+    });
   }
 
   try {
@@ -105,27 +110,6 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Tipo de marcaje inválido', code: 'INVALID_MARK_TYPE' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: activeVacation } = await supabaseAdmin
-      .from('vacation_requests')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('status', 'approved')
-      .lte('start_date', today)
-      .gte('end_date', today)
-      .maybeSingle();
-
-    if (activeVacation) {
-      return new Response(
-        JSON.stringify({
-          error: 'No puedes marcar asistencia durante vacaciones aprobadas',
-          code: 'ON_VACATION',
-          allowed: false,
-        }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
