@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       app_config: {
@@ -255,6 +280,51 @@ export type Database = {
           },
         ]
       }
+      user_rest_schedule: {
+        Row: {
+          created_at: string
+          days_of_week: number[]
+          effective_from: string
+          id: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          days_of_week?: number[]
+          effective_from?: string
+          id?: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          days_of_week?: number[]
+          effective_from?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       vacation_requests: {
         Row: {
           created_at: string
@@ -310,51 +380,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      user_rest_schedule: {
-        Row: {
-          created_at: string
-          days_of_week: number[]
-          effective_from: string
-          id: string
-          notes: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          days_of_week?: number[]
-          effective_from?: string
-          id?: string
-          notes?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          days_of_week?: number[]
-          effective_from?: string
-          id?: string
-          notes?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      user_roles: {
-        Row: {
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Insert: {
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
-        Update: {
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
       }
       work_calendar: {
         Row: {
@@ -416,11 +441,15 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "vacation_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      get_vacation_accrual_rate: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
+      get_user_department: { Args: { _user_id: string }; Returns: string }
+      get_vacation_accrual_rate: { Args: never; Returns: number }
       get_vacation_balance: {
         Args: { _user_id: string; _year?: number }
         Returns: {
@@ -432,7 +461,6 @@ export type Database = {
           worked_days: number
         }[]
       }
-      get_user_department: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -462,9 +490,19 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "vacation_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       review_vacation_request: {
-        Args: { _decision: string; _request_id: string; _review_comment?: string }
+        Args: {
+          _decision: string
+          _request_id: string
+          _review_comment?: string
+        }
         Returns: {
           created_at: string
           department_id: string
@@ -479,6 +517,12 @@ export type Database = {
           status: string
           updated_at: string
           user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "vacation_requests"
+          isOneToOne: true
+          isSetofReturn: false
         }
       }
       validate_attendance_mark: {
@@ -617,6 +661,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["employee", "department_head", "global_manager"],
