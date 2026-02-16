@@ -15,6 +15,7 @@ import GlobalPanel from "./pages/GlobalPanel";
 import Configuration from "./pages/Configuration";
 import UserManagement from "./pages/UserManagement";
 import Vacations from "./pages/Vacations";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -97,6 +98,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['global_manager']}>
                   <UserManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
                 </ProtectedRoute>
               }
             />

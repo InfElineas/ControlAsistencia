@@ -12,6 +12,7 @@ import {
   PlaneTakeoff,
   Settings,
   UserCog,
+  UserCircle2,
   Users,
   XCircle,
 } from 'lucide-react';
@@ -71,7 +72,15 @@ export default function Index() {
   const isGlobalManager = role === 'global_manager';
   const isDepartmentHead = role === 'department_head';
 
-  const quickAccess: QuickAccessItem[] = [];
+  const quickAccess: QuickAccessItem[] = [
+    {
+      label: 'Mi perfil',
+      description: 'Actualiza tus datos personales',
+      icon: UserCircle2,
+      route: '/profile',
+    },
+  ];
+
   if (!isGlobalManager) {
     quickAccess.push({
       label: 'Vacaciones',
