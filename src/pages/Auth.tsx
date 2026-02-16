@@ -26,6 +26,7 @@ const signupSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'Mínimo 6 caracteres'),
   fullName: z.string().min(2, 'Nombre requerido'),
+  phone: z.string().min(8, 'Teléfono requerido (mínimo 8 dígitos)'),
   departmentId: z.string().min(1, 'Selecciona un departamento'),
 });
 
@@ -34,8 +35,10 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
   const { signIn, signUp } = useAuth();
@@ -45,6 +48,7 @@ export default function Auth() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMessage('');
     setLoading(true);
 
     try {
@@ -63,19 +67,25 @@ export default function Auth() {
           return;
         }
       } else {
-        const result = signupSchema.safeParse({ email, password, fullName, departmentId });
+        const result = signupSchema.safeParse({ email, password, fullName, phone, departmentId });
         if (!result.success) {
           setError(result.error.errors[0].message);
           setLoading(false);
           return;
         }
 
-        const { error } = await signUp(email, password, fullName, departmentId);
+        const { error } = await signUp(email, password, fullName, departmentId, phone);
         if (error) {
           setError(mapAuthError(error, 'signup'));
           setLoading(false);
           return;
         }
+
+        setIsLogin(true);
+        setPassword('');
+        setSuccessMessage('Registro exitoso. Revisa tu Gmail para activar y confirmar tu cuenta antes de iniciar sesión.');
+        setLoading(false);
+        return;
       }
 
       navigate('/');
@@ -112,6 +122,19 @@ export default function Auth() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Tu nombre"
+                  required={!isLogin}
+                />
+              </div>
+            )}
+
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="phone">Teléfono</Label>
+                <Input
+                  id="phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Ej: 5512345678"
                   required={!isLogin}
                 />
               </div>
@@ -172,6 +195,12 @@ export default function Auth() {
               </div>
             )}
 
+            {successMessage && (
+              <div className="p-3 rounded-lg bg-success/10 text-success text-sm">
+                {successMessage}
+              </div>
+            )}
+
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
@@ -193,6 +222,7 @@ export default function Auth() {
               onClick={() => {
                 setIsLogin(!isLogin);
                 setError('');
+                setSuccessMessage('');
               }}
               className="text-primary font-medium hover:underline"
             >
