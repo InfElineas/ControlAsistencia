@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       app_config: {
@@ -356,6 +381,62 @@ export type Database = {
         }
         Relationships: []
       }
+      vacation_requests: {
+        Row: {
+          created_at: string
+          department_id: string
+          end_date: string
+          id: string
+          reason: string | null
+          requested_days: number
+          review_comment: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          end_date: string
+          id?: string
+          reason?: string | null
+          requested_days: number
+          review_comment?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          end_date?: string
+          id?: string
+          reason?: string | null
+          requested_days?: number
+          review_comment?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vacation_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       work_calendar: {
         Row: {
           created_at: string
@@ -433,6 +514,18 @@ export type Database = {
         }[]
       }
       get_user_department: { Args: { _user_id: string }; Returns: string }
+      get_vacation_accrual_rate: { Args: never; Returns: number }
+      get_vacation_balance: {
+        Args: { _user_id: string; _year?: number }
+        Returns: {
+          accrual_rate: number
+          approved_days: number
+          available_days: number
+          earned_days: number
+          pending_days: number
+          worked_days: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -617,6 +710,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["employee", "department_head", "global_manager"],
