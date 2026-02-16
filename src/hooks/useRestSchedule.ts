@@ -12,21 +12,22 @@ interface RestSchedule {
   created_at: string;
 }
 
-export function useRestSchedule() {
+export function useRestSchedule(targetUserId?: string | null) {
   const { user } = useAuth();
+  const effectiveUserId = targetUserId ?? user?.id ?? null;
   const [schedules, setSchedules] = useState<RestSchedule[]>([]);
   const [currentSchedule, setCurrentSchedule] = useState<RestSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSchedules = useCallback(async () => {
-    if (!user) return;
+    if (!effectiveUserId) return;
 
     try {
       const { data, error } = await supabase
         .from('user_rest_schedule')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .order('effective_from', { ascending: false });
 
       if (error) throw error;
@@ -42,13 +43,13 @@ export function useRestSchedule() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [effectiveUserId]);
 
   useEffect(() => {
-    if (user) {
+    if (effectiveUserId) {
       fetchSchedules();
     }
-  }, [user, fetchSchedules]);
+  }, [effectiveUserId, fetchSchedules]);
 
   // Validate that rest days have at least 3 days of separation
   const validateRestDaysSeparation = (daysOfWeek: number[]): { valid: boolean; error?: string } => {
@@ -79,8 +80,43 @@ export function useRestSchedule() {
     return { valid: true };
   };
 
+
+  const hasWorkedOnSelectedRestDay = async (daysOfWeek: number[], effectiveFrom: string): Promise<{ valid: boolean; error?: string }> => {
+    if (!effectiveUserId) return { valid: true };
+
+    const start = new Date(`${effectiveFrom}T00:00:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+
+    const { data, error } = await supabase
+      .from('attendance_marks')
+      .select('timestamp')
+      .eq('user_id', effectiveUserId)
+      .gte('timestamp', start.toISOString())
+      .lt('timestamp', end.toISOString());
+
+    if (error) {
+      return { valid: false, error: getErrorMessage(error) };
+    }
+
+    const conflictingMark = (data || []).find((mark) => {
+      const markDate = new Date(mark.timestamp);
+      return daysOfWeek.includes(markDate.getDay());
+    });
+
+    if (!conflictingMark) {
+      return { valid: true };
+    }
+
+    const conflictDate = new Date(conflictingMark.timestamp).toLocaleDateString('es-ES');
+    return {
+      valid: false,
+      error: `No puedes asignar descanso en un día ya trabajado (${conflictDate}).`,
+    };
+  };
+
   const addSchedule = async (daysOfWeek: number[], effectiveFrom: string, notes?: string) => {
-    if (!user) return { error: 'Usuario no autenticado' };
+    if (!effectiveUserId) return { error: 'Usuario no autenticado' };
 
     // Validate separation between rest days
     const validation = validateRestDaysSeparation(daysOfWeek);
@@ -88,11 +124,16 @@ export function useRestSchedule() {
       return { error: validation.error };
     }
 
+    const workedDayValidation = await hasWorkedOnSelectedRestDay(daysOfWeek, effectiveFrom);
+    if (!workedDayValidation.valid) {
+      return { error: workedDayValidation.error };
+    }
+
     try {
       const { error } = await supabase
         .from('user_rest_schedule')
         .insert({
-          user_id: user.id,
+          user_id: effectiveUserId,
           days_of_week: daysOfWeek,
           effective_from: effectiveFrom,
           notes,
