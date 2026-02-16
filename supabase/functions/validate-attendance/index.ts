@@ -78,18 +78,17 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    const token = authHeader?.replace('Bearer ', '').trim();
+
+    if (!token) {
       return new Response(
         JSON.stringify({ error: 'No autorizado', code: 'UNAUTHORIZED' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
 
     if (userError || !user) {
       console.error('Auth error:', userError);
@@ -109,7 +108,26 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: activeVacation } = await supabaseAdmin
+      .from('vacation_requests')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .lte('start_date', today)
+      .gte('end_date', today)
+      .maybeSingle();
+
+    if (activeVacation) {
+      return new Response(
+        JSON.stringify({
+          error: 'No puedes marcar asistencia durante vacaciones aprobadas',
+          code: 'ON_VACATION',
+          allowed: false,
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const today = new Date().toISOString().slice(0, 10);
     const { data: activeVacation } = await supabaseAdmin
