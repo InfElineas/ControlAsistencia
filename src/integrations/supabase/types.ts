@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       app_config: {
@@ -359,6 +384,7 @@ export type Database = {
         }
         Relationships: []
       }
+      
       work_calendar: {
         Row: {
           created_at: string
@@ -436,6 +462,7 @@ export type Database = {
         }[]
       }
       get_user_department: { Args: { _user_id: string }; Returns: string }
+      
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -620,6 +647,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["employee", "department_head", "global_manager"],
