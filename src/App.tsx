@@ -14,6 +14,9 @@ import Department from "./pages/Department";
 import GlobalPanel from "./pages/GlobalPanel";
 import Configuration from "./pages/Configuration";
 import UserManagement from "./pages/UserManagement";
+import DepartmentsManagement from "./pages/DepartmentsManagement";
+import Vacations from "./pages/Vacations";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,7 +57,7 @@ const App = () => (
             <Route
               path="/rest-schedule"
               element={
-                <ProtectedRoute excludedRoles={['global_manager']}>
+                <ProtectedRoute>
                   <RestSchedule />
                 </ProtectedRoute>
               }
@@ -84,10 +87,34 @@ const App = () => (
               }
             />
             <Route
+              path="/vacations"
+              element={
+                <ProtectedRoute excludedRoles={['global_manager']}>
+                  <Vacations />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/users"
               element={
                 <ProtectedRoute allowedRoles={['global_manager']}>
                   <UserManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/departments-admin"
+              element={
+                <ProtectedRoute allowedRoles={['global_manager']}>
+                  <DepartmentsManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
                 </ProtectedRoute>
               }
             />

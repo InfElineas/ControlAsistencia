@@ -10,6 +10,7 @@ interface UserProfile {
   email: string;
   full_name: string;
   department_id: string;
+  phone: string | null;
 }
 
 interface AuthContextType {
@@ -19,8 +20,14 @@ interface AuthContextType {
   role: AppRole | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string, departmentId: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, fullName: string, departmentId: string, phone: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  updateProfile: (input: {
+    full_name: string;
+    phone: string;
+    department_id: string;
+    email: string;
+  }) => Promise<{ error: string | null; emailConfirmationRequired?: boolean }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -102,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   };
 
-  const signUp = async (email: string, password: string, fullName: string, departmentId: string) => {
+  const signUp = async (email: string, password: string, fullName: string, departmentId: string, phone: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
     const { error } = await supabase.auth.signUp({
@@ -113,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         data: {
           full_name: fullName,
           department_id: departmentId,
+          phone,
         },
       },
     });
@@ -127,6 +135,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null);
   };
 
+  const updateProfile = async (input: {
+    full_name: string;
+    phone: string;
+    department_id: string;
+    email: string;
+  }) => {
+    if (!user) {
+      return { error: 'Usuario no autenticado' };
+    }
+
+    try {
+      let emailConfirmationRequired = false;
+
+      if (input.email !== user.email) {
+        const { error: authError } = await supabase.auth.updateUser({ email: input.email });
+        if (authError) {
+          return { error: authError.message };
+        }
+        emailConfirmationRequired = true;
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: input.full_name,
+          phone: input.phone,
+          department_id: input.department_id,
+          email: input.email,
+        })
+        .eq('user_id', user.id)
+        .select('*')
+        .single();
+
+      if (error) {
+        return { error: error.message };
+      }
+
+      setProfile(data as UserProfile);
+      return { error: null, emailConfirmationRequired };
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        return { error: error.message };
+      }
+      return { error: 'No fue posible actualizar el perfil' };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -137,6 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
+      updateProfile,
     }}>
       {children}
     </AuthContext.Provider>
