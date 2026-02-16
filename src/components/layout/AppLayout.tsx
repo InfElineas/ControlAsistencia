@@ -7,6 +7,7 @@ import {
   History,
   Settings,
   Users,
+  Building2,
   UserCog,
   User,
   LogOut,
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   { href: '/department', label: 'Departamento', icon: Users, roles: ['department_head'] },
   { href: '/global', label: 'Panel Global', icon: Users, roles: ['global_manager'] },
   { href: '/users', label: 'Usuarios', icon: UserCog, roles: ['global_manager'] },
+  { href: '/departments-admin', label: 'Departamentos', icon: Building2, roles: ['global_manager'] },
   { href: '/configuration', label: 'Configuración', icon: Settings, roles: ['global_manager'] },
 ];
 

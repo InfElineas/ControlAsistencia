@@ -196,16 +196,19 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          rest_groups_enabled: boolean
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          rest_groups_enabled?: boolean
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          rest_groups_enabled?: boolean
         }
         Relationships: []
       }
@@ -332,6 +335,76 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "vacation_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rest_group_members: {
+        Row: {
+          created_at: string
+          effective_from: string
+          group_id: string
+          id: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          effective_from?: string
+          group_id: string
+          id?: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          effective_from?: string
+          group_id?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rest_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "rest_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rest_groups: {
+        Row: {
+          created_at: string
+          days_of_week: number[]
+          department_id: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days_of_week?: number[]
+          department_id: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days_of_week?: number[]
+          department_id?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rest_groups_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"

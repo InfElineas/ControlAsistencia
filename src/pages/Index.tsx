@@ -111,6 +111,12 @@ export default function Index() {
         route: '/users',
       },
       {
+        label: 'Departamentos',
+        description: 'Altas, bajas y parámetros de departamentos',
+        icon: Building2,
+        route: '/departments-admin',
+      },
+      {
         label: 'Configuración',
         description: 'Reglas y parámetros del sistema',
         icon: Settings,
