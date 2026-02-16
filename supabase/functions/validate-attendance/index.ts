@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '').trim();
+    const token = authHeader?.replace(/^Bearer\s+/i, '').trim();
 
     if (!token) {
       return new Response(

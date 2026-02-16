@@ -138,6 +138,9 @@ export function useAttendance() {
 
       // Call the edge function for validated attendance
       const response = await supabase.functions.invoke('validate-attendance', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: {
           mark_type: markType,
           latitude: geoData.latitude,
