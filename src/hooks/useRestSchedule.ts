@@ -80,6 +80,41 @@ export function useRestSchedule(targetUserId?: string | null) {
     return { valid: true };
   };
 
+
+  const hasWorkedOnSelectedRestDay = async (daysOfWeek: number[], effectiveFrom: string): Promise<{ valid: boolean; error?: string }> => {
+    if (!effectiveUserId) return { valid: true };
+
+    const start = new Date(`${effectiveFrom}T00:00:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+
+    const { data, error } = await supabase
+      .from('attendance_marks')
+      .select('timestamp')
+      .eq('user_id', effectiveUserId)
+      .gte('timestamp', start.toISOString())
+      .lt('timestamp', end.toISOString());
+
+    if (error) {
+      return { valid: false, error: getErrorMessage(error) };
+    }
+
+    const conflictingMark = (data || []).find((mark) => {
+      const markDate = new Date(mark.timestamp);
+      return daysOfWeek.includes(markDate.getDay());
+    });
+
+    if (!conflictingMark) {
+      return { valid: true };
+    }
+
+    const conflictDate = new Date(conflictingMark.timestamp).toLocaleDateString('es-ES');
+    return {
+      valid: false,
+      error: `No puedes asignar descanso en un día ya trabajado (${conflictDate}).`,
+    };
+  };
+
   const addSchedule = async (daysOfWeek: number[], effectiveFrom: string, notes?: string) => {
     if (!effectiveUserId) return { error: 'Usuario no autenticado' };
 
@@ -87,6 +122,11 @@ export function useRestSchedule(targetUserId?: string | null) {
     const validation = validateRestDaysSeparation(daysOfWeek);
     if (!validation.valid) {
       return { error: validation.error };
+    }
+
+    const workedDayValidation = await hasWorkedOnSelectedRestDay(daysOfWeek, effectiveFrom);
+    if (!workedDayValidation.valid) {
+      return { error: workedDayValidation.error };
     }
 
     try {

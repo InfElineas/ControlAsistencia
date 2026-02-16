@@ -22,8 +22,8 @@ interface ValidationResult {
   department_id: string | null;
 }
 
-interface CheckoutConfig {
-  checkout_start_time: string | null;
+interface CheckinConfig {
+  checkin_end_time: string | null;
   timezone: string;
 }
 
@@ -48,7 +48,7 @@ function getCurrentSecondsInTimezone(timezone: string): number {
   return parseTimeToSeconds(`${hour}:${minute}:${second}`);
 }
 
-async function hasReachedCheckoutTime(
+async function isLateCheckin(
   supabaseAdmin: ReturnType<typeof createClient>,
   departmentId: string | null
 ): Promise<boolean> {
@@ -56,18 +56,18 @@ async function hasReachedCheckoutTime(
 
   const { data, error } = await supabaseAdmin
     .from('department_schedules')
-    .select('checkout_start_time, timezone')
+    .select('checkin_end_time, timezone')
     .eq('department_id', departmentId)
-    .single<CheckoutConfig>();
+    .single<CheckinConfig>();
 
-  if (error || !data?.checkout_start_time) {
+  if (error || !data?.checkin_end_time) {
     return false;
   }
 
-  const checkoutSeconds = parseTimeToSeconds(data.checkout_start_time);
+  const checkinEndSeconds = parseTimeToSeconds(data.checkin_end_time);
   const currentSeconds = getCurrentSecondsInTimezone(data.timezone || 'UTC');
 
-  return currentSeconds >= checkoutSeconds;
+  return currentSeconds > checkinEndSeconds;
 }
 
 Deno.serve(async (req) => {
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
     const { data: validationResult, error: validationError } = await supabaseAdmin
       .rpc('validate_attendance_mark', {
         _user_id: user.id,
-        _mark_type: mark_type
+        _mark_type: mark_type,
       });
 
     if (validationError) {
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           error: result.reason || 'No autorizado para registrar asistencia',
           code: 'FORBIDDEN',
-          allowed: false
+          allowed: false,
         }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -173,26 +173,15 @@ Deno.serve(async (req) => {
         JSON.stringify({
           error: 'Debes estar dentro de la zona permitida para marcar entrada',
           code: 'OUTSIDE_GEOFENCE',
-          allowed: false
+          allowed: false,
         }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (mark_type === 'OUT' && inside_geofence !== false) {
-      const reachedCheckout = await hasReachedCheckoutTime(supabaseAdmin, result.department_id);
-
-      if (!reachedCheckout) {
-        return new Response(
-          JSON.stringify({
-            error: 'La salida se habilita al salir de la zona o al llegar al horario de salida.',
-            code: 'OUT_NOT_ALLOWED_YET',
-            allowed: false
-          }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
+    const lateCheckin = mark_type === 'IN'
+      ? await isLateCheckin(supabaseAdmin, result.department_id)
+      : false;
 
     const { data: markData, error: insertError } = await supabaseAdmin
       .from('attendance_marks')
@@ -205,6 +194,7 @@ Deno.serve(async (req) => {
         distance_to_center,
         inside_geofence: inside_geofence ?? true,
         blocked: false,
+        block_reason: lateCheckin ? 'LATE_CHECKIN' : null,
       })
       .select()
       .single();
@@ -222,11 +212,12 @@ Deno.serve(async (req) => {
         success: true,
         allowed: true,
         mark: markData,
-        message: mark_type === 'IN' ? 'Entrada registrada correctamente' : 'Salida registrada correctamente'
+        message: mark_type === 'IN'
+          ? lateCheckin ? 'Entrada registrada con tardanza' : 'Entrada registrada correctamente'
+          : 'Salida registrada correctamente',
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
   } catch (error) {
     console.error('Unexpected error:', error);
     return new Response(

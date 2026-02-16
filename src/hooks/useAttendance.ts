@@ -29,6 +29,7 @@ interface AttendanceState {
 interface MarkAttendanceResult {
   error: string | null;
   code?: string;
+  message?: string;
 }
 
 interface FunctionErrorPayload {
@@ -167,7 +168,7 @@ export function useAttendance() {
       }
 
       await fetchTodayMarks();
-      return { error: null };
+      return { error: null, message: result.message };
     } catch (error: unknown) {
       console.error('Attendance error:', error);
       return { error: getErrorMessage(error, 'Error desconocido'), code: 'UNKNOWN_ERROR' };
