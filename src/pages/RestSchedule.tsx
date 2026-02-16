@@ -1,16 +1,24 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRestSchedule } from '@/hooks/useRestSchedule';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Calendar, Plus, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapGenericActionError } from '@/lib/error-messages';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+interface WorkerOption {
+  user_id: string;
+  full_name: string;
+  email: string;
+}
 
 const DAYS_OF_WEEK = [
   { value: 0, label: 'Dom', fullLabel: 'Domingo' },
@@ -23,7 +31,15 @@ const DAYS_OF_WEEK = [
 ];
 
 export default function RestSchedule() {
-  const { schedules, currentSchedule, loading, addSchedule, validateRestDaysSeparation } = useRestSchedule();
+  const { user, role } = useAuth();
+  const isGlobalManager = role === 'global_manager';
+  const [workerOptions, setWorkerOptions] = useState<WorkerOption[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [loadingWorkers, setLoadingWorkers] = useState(false);
+
+  const { schedules, currentSchedule, loading, addSchedule, validateRestDaysSeparation } = useRestSchedule(
+    isGlobalManager ? selectedUserId : null
+  );
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [effectiveFrom, setEffectiveFrom] = useState(
     new Date().toISOString().split('T')[0]
@@ -31,6 +47,49 @@ export default function RestSchedule() {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isGlobalManager) return;
+
+    const fetchWorkers = async () => {
+      setLoadingWorkers(true);
+      const [{ data: profilesData, error: profilesError }, { data: roleData, error: rolesError }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('user_id, full_name, email')
+          .order('full_name', { ascending: true }),
+        supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'global_manager'),
+      ]);
+
+      if (profilesError || rolesError) {
+        toast.error(
+          mapGenericActionError(
+            profilesError ?? rolesError,
+            'No se pudo cargar la lista de trabajadores.'
+          )
+        );
+        setLoadingWorkers(false);
+        return;
+      }
+
+      const workers = (profilesData ?? []) as WorkerOption[];
+      const globalManagerIds = new Set((roleData ?? []).map((item) => item.user_id));
+      const filteredWorkers = workers.filter(
+        (worker) => worker.user_id !== user?.id && !globalManagerIds.has(worker.user_id)
+      );
+      setWorkerOptions(filteredWorkers);
+
+      if (!selectedUserId && filteredWorkers.length > 0) {
+        setSelectedUserId(filteredWorkers[0].user_id);
+      }
+      setLoadingWorkers(false);
+    };
+
+    fetchWorkers();
+  }, [isGlobalManager, selectedUserId, user?.id]);
 
   const handleDayToggle = (day: number) => {
     const newDays = selectedDays.includes(day) 
@@ -49,6 +108,11 @@ export default function RestSchedule() {
   };
 
   const handleSave = async () => {
+    if (isGlobalManager && !selectedUserId) {
+      toast.error('Selecciona un trabajador para configurar sus días de descanso');
+      return;
+    }
+
     if (selectedDays.length === 0) {
       toast.error('Selecciona al menos un día de descanso');
       return;
@@ -87,11 +151,38 @@ export default function RestSchedule() {
     <AppLayout>
       <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
         <div>
-          <h1 className="text-2xl font-bold">Mis Días de Descanso</h1>
+          <h1 className="text-2xl font-bold">{isGlobalManager ? 'Descansos del personal' : 'Mis Días de Descanso'}</h1>
           <p className="text-muted-foreground">
-            Configura qué días de la semana no trabajas
+            {isGlobalManager
+              ? 'Configura días de descanso y planificación semanal para trabajadores'
+              : 'Configura qué días de la semana no trabajas'}
           </p>
         </div>
+
+        {isGlobalManager && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Seleccionar trabajador</CardTitle>
+              <CardDescription>
+                Como administrador global no necesitas configurar tu propio plan: aquí gestionas la planificación de otros.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Select value={selectedUserId ?? ''} onValueChange={setSelectedUserId} disabled={loadingWorkers}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona un trabajador" />
+                </SelectTrigger>
+                <SelectContent>
+                  {workerOptions.map((worker) => (
+                    <SelectItem key={worker.user_id} value={worker.user_id}>
+                      {worker.full_name} · {worker.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Current Schedule */}
         {currentSchedule && (

@@ -12,21 +12,22 @@ interface RestSchedule {
   created_at: string;
 }
 
-export function useRestSchedule() {
+export function useRestSchedule(targetUserId?: string | null) {
   const { user } = useAuth();
+  const effectiveUserId = targetUserId ?? user?.id ?? null;
   const [schedules, setSchedules] = useState<RestSchedule[]>([]);
   const [currentSchedule, setCurrentSchedule] = useState<RestSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchSchedules = useCallback(async () => {
-    if (!user) return;
+    if (!effectiveUserId) return;
 
     try {
       const { data, error } = await supabase
         .from('user_rest_schedule')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', effectiveUserId)
         .order('effective_from', { ascending: false });
 
       if (error) throw error;
@@ -42,13 +43,13 @@ export function useRestSchedule() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [effectiveUserId]);
 
   useEffect(() => {
-    if (user) {
+    if (effectiveUserId) {
       fetchSchedules();
     }
-  }, [user, fetchSchedules]);
+  }, [effectiveUserId, fetchSchedules]);
 
   // Validate that rest days have at least 3 days of separation
   const validateRestDaysSeparation = (daysOfWeek: number[]): { valid: boolean; error?: string } => {
@@ -80,7 +81,7 @@ export function useRestSchedule() {
   };
 
   const addSchedule = async (daysOfWeek: number[], effectiveFrom: string, notes?: string) => {
-    if (!user) return { error: 'Usuario no autenticado' };
+    if (!effectiveUserId) return { error: 'Usuario no autenticado' };
 
     // Validate separation between rest days
     const validation = validateRestDaysSeparation(daysOfWeek);
@@ -92,7 +93,7 @@ export function useRestSchedule() {
       const { error } = await supabase
         .from('user_rest_schedule')
         .insert({
-          user_id: user.id,
+          user_id: effectiveUserId,
           days_of_week: daysOfWeek,
           effective_from: effectiveFrom,
           notes,
