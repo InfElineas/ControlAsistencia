@@ -111,6 +111,27 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: activeVacation } = await supabaseAdmin
+      .from('vacation_requests')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .lte('start_date', today)
+      .gte('end_date', today)
+      .maybeSingle();
+
+    if (activeVacation) {
+      return new Response(
+        JSON.stringify({
+          error: 'No puedes marcar asistencia durante vacaciones aprobadas',
+          code: 'ON_VACATION',
+          allowed: false,
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { data: validationResult, error: validationError } = await supabaseAdmin
       .rpc('validate_attendance_mark', {
         _user_id: user.id,
