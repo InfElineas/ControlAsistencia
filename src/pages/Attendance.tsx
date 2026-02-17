@@ -72,11 +72,8 @@ export default function Attendance() {
   const isRest = isRestDay(today);
   const checkinCheck = isWithinCheckinWindow();
   
-  // Check if marking is allowed
-  const canMark = !isGlobalManager &&
-                  geofenceResult?.isInside &&
-                  !isRest &&
-                  (canMarkIn || canMarkOut);
+  const canMarkInAction = !isGlobalManager && !isRest && Boolean(geofenceResult?.isInside) && canMarkIn;
+  const canMarkOutAction = !isGlobalManager && !isRest && canMarkOut;
 
   const handleMark = async (type: 'IN' | 'OUT') => {
     if (isGlobalManager) {
@@ -218,7 +215,7 @@ export default function Attendance() {
             {canMarkIn && (
               <AttendanceButton
                 type="IN"
-                disabled={!canMark}
+                disabled={!canMarkInAction}
                 loading={marking}
                 onClick={() => handleMark('IN')}
               />
@@ -226,7 +223,7 @@ export default function Attendance() {
             {canMarkOut && (
               <AttendanceButton
                 type="OUT"
-                disabled={(geofenceResult?.isInside ?? true) && !hasReachedCheckoutTime()}
+                disabled={!canMarkOutAction}
                 loading={marking}
                 onClick={() => handleMark('OUT')}
               />

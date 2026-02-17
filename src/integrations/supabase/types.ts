@@ -286,6 +286,62 @@ export type Database = {
           },
         ]
       }
+      vacation_requests: {
+        Row: {
+          created_at: string
+          department_id: string
+          end_date: string
+          id: string
+          reason: string | null
+          requested_days: number
+          review_comment: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          end_date: string
+          id?: string
+          reason?: string | null
+          requested_days: number
+          review_comment?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          end_date?: string
+          id?: string
+          reason?: string | null
+          requested_days?: number
+          review_comment?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vacation_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rest_group_members: {
         Row: {
           created_at: string
@@ -517,12 +573,21 @@ export type Database = {
           updated_at: string
           user_id: string
         }
-        SetofOptions: {
-          from: "*"
-          to: "vacation_requests"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+      }
+      get_vacation_accrual_rate: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      get_vacation_balance: {
+        Args: { _user_id: string; _year?: number }
+        Returns: {
+          accrual_rate: number
+          approved_days: number
+          available_days: number
+          earned_days: number
+          pending_days: number
+          worked_days: number
+        }[]
       }
       get_user_department: { Args: { _user_id: string }; Returns: string }
       get_vacation_accrual_rate: { Args: never; Returns: number }
@@ -566,19 +631,9 @@ export type Database = {
           updated_at: string
           user_id: string
         }
-        SetofOptions: {
-          from: "*"
-          to: "vacation_requests"
-          isOneToOne: true
-          isSetofReturn: false
-        }
       }
       review_vacation_request: {
-        Args: {
-          _decision: string
-          _request_id: string
-          _review_comment?: string
-        }
+        Args: { _decision: string; _request_id: string; _review_comment?: string }
         Returns: {
           created_at: string
           department_id: string
@@ -593,12 +648,6 @@ export type Database = {
           status: string
           updated_at: string
           user_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "vacation_requests"
-          isOneToOne: true
-          isSetofReturn: false
         }
       }
       validate_attendance_mark: {
