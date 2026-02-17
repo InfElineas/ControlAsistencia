@@ -9,8 +9,10 @@ import {
   CheckCircle,
   Clock,
   Loader2,
+  PlaneTakeoff,
   Settings,
   UserCog,
+  UserCircle2,
   Users,
   XCircle,
 } from 'lucide-react';
@@ -70,9 +72,32 @@ export default function Index() {
   const isGlobalManager = role === 'global_manager';
   const isDepartmentHead = role === 'department_head';
 
-  const quickAccess: QuickAccessItem[] = [];
+  const quickAccess: QuickAccessItem[] = [
+    {
+      label: 'Mi perfil',
+      description: 'Actualiza tus datos personales',
+      icon: UserCircle2,
+      route: '/profile',
+    },
+  ];
+
+  if (!isGlobalManager) {
+    quickAccess.push({
+      label: 'Vacaciones',
+      description: 'Solicitudes y saldo acumulado',
+      icon: PlaneTakeoff,
+      route: '/vacations',
+    });
+  }
+
   if (isGlobalManager) {
     quickAccess.push(
+      {
+        label: 'Descansos del personal',
+        description: 'Configura descansos para trabajadores',
+        icon: Calendar,
+        route: '/rest-schedule',
+      },
       {
         label: 'Panel global',
         description: 'Métricas y consolidado general',
@@ -84,6 +109,12 @@ export default function Index() {
         description: 'Gestión de cuentas y permisos',
         icon: UserCog,
         route: '/users',
+      },
+      {
+        label: 'Departamentos',
+        description: 'Altas, bajas y parámetros de departamentos',
+        icon: Building2,
+        route: '/departments-admin',
       },
       {
         label: 'Configuración',
@@ -220,10 +251,10 @@ export default function Index() {
                     <span className="font-medium">{getMarkLabel(mark.mark_type)}</span>
                     <span className="text-muted-foreground">{format(new Date(mark.timestamp), 'HH:mm')}</span>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {quickAccess.length > 0 && (
