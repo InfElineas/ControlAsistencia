@@ -195,19 +195,28 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_paused: boolean
           name: string
+          pause_reason: string | null
+          paused_at: string | null
           rest_groups_enabled: boolean
         }
         Insert: {
           created_at?: string
           id?: string
+          is_paused?: boolean
           name: string
+          pause_reason?: string | null
+          paused_at?: string | null
           rest_groups_enabled?: boolean
         }
         Update: {
           created_at?: string
           id?: string
+          is_paused?: boolean
           name?: string
+          pause_reason?: string | null
+          paused_at?: string | null
           rest_groups_enabled?: boolean
         }
         Relationships: []

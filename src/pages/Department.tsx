@@ -53,6 +53,7 @@ export default function Department() {
   const [employees, setEmployees] = useState<DepartmentEmployee[]>([]);
   const [attendance, setAttendance] = useState<AttendanceSummary[]>([]);
   const [departmentName, setDepartmentName] = useState('');
+  const [departmentPaused, setDepartmentPaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState('');
@@ -61,24 +62,24 @@ export default function Department() {
     to: format(new Date(), 'yyyy-MM-dd'),
   });
 
-  useEffect(() => {
-    if (profile?.department_id) {
-      fetchData();
-    }
-  }, [profile?.department_id, fetchData]);
-
   const fetchData = useCallback(async () => {
     if (!profile?.department_id) return;
     setLoading(true);
 
+    let currentDepartmentPaused = false;
+
     // Fetch department name
     const { data: deptData } = await supabase
       .from('departments')
-      .select('name')
+      .select('name, is_paused')
       .eq('id', profile.department_id)
       .single();
 
-    if (deptData) setDepartmentName(deptData.name);
+    if (deptData) {
+      setDepartmentName(deptData.name);
+      currentDepartmentPaused = Boolean(deptData.is_paused);
+      setDepartmentPaused(currentDepartmentPaused);
+    }
 
     // Fetch employees in department (excluding department heads and global managers)
     const { data: empData } = await supabase
@@ -119,7 +120,7 @@ export default function Department() {
           userId: emp.user_id,
           employeeName: emp.full_name,
           email: emp.email,
-          todayStatus: inMark ? 'PRESENTE' : null,
+          todayStatus: currentDepartmentPaused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : null,
           inTime: inMark?.timestamp || null,
           outTime: outMark?.timestamp || null,
           insideGeofence: inMark?.inside_geofence ?? null,
@@ -132,6 +133,12 @@ export default function Department() {
 
     setLoading(false);
   }, [profile?.department_id]);
+
+  useEffect(() => {
+    if (profile?.department_id) {
+      fetchData();
+    }
+  }, [profile?.department_id, fetchData]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -171,7 +178,7 @@ export default function Department() {
             employee_name: emp.full_name,
             employee_email: emp.email,
             department: departmentName,
-            status: inMark ? 'PRESENTE' : 'AUSENTE',
+            status: departmentPaused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : 'AUSENTE',
             in_time: inMark ? formatTime(inMark.timestamp) : null,
             out_time: outMark ? formatTime(outMark.timestamp) : null,
             lateness_minutes: null, // Could calculate based on config

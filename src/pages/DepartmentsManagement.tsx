@@ -15,6 +15,9 @@ interface DepartmentItem {
   id: string;
   name: string;
   rest_groups_enabled: boolean;
+  is_paused: boolean;
+  pause_reason: string | null;
+  paused_at: string | null;
 }
 
 interface RestGroupItem {
@@ -57,7 +60,7 @@ export default function DepartmentsManagement() {
     setLoading(true);
     const { data, error } = await supabase
       .from('departments')
-      .select('id, name, rest_groups_enabled')
+      .select('id, name, rest_groups_enabled, is_paused, pause_reason, paused_at')
       .order('name', { ascending: true });
 
     if (error) {
@@ -117,6 +120,7 @@ export default function DepartmentsManagement() {
       .insert({
         name: normalizedName,
         rest_groups_enabled: false,
+        is_paused: false,
       });
 
     if (error) {
@@ -301,18 +305,54 @@ export default function DepartmentsManagement() {
                         />
                       </div>
 
-                      <div className="flex items-center gap-2 pt-6">
-                        <Switch
-                          checked={department.rest_groups_enabled}
-                          onCheckedChange={(checked) =>
-                            setDepartments((previous) =>
-                              previous.map((item) =>
-                                item.id === department.id ? { ...item, rest_groups_enabled: checked } : item
+                      <div className="space-y-2 pt-4">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={department.rest_groups_enabled}
+                            onCheckedChange={(checked) =>
+                              setDepartments((previous) =>
+                                previous.map((item) =>
+                                  item.id === department.id ? { ...item, rest_groups_enabled: checked } : item
+                                )
                               )
-                            )
-                          }
-                        />
-                        <span className="text-sm">Grupos descanso</span>
+                            }
+                          />
+                          <span className="text-sm">Grupos descanso</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={department.is_paused}
+                            onCheckedChange={(checked) =>
+                              setDepartments((previous) =>
+                                previous.map((item) =>
+                                  item.id === department.id
+                                    ? {
+                                        ...item,
+                                        is_paused: checked,
+                                        paused_at: checked ? new Date().toISOString() : null,
+                                        pause_reason: checked ? item.pause_reason : null,
+                                      }
+                                    : item
+                                )
+                              )
+                            }
+                          />
+                          <span className="text-sm">Departamento en descanso</span>
+                        </div>
+                        {department.is_paused && (
+                          <Input
+                            value={department.pause_reason ?? ''}
+                            onChange={(event) => {
+                              const reason = event.target.value;
+                              setDepartments((previous) =>
+                                previous.map((item) =>
+                                  item.id === department.id ? { ...item, pause_reason: reason } : item
+                                )
+                              );
+                            }}
+                            placeholder="Motivo (opcional): parada operativa"
+                          />
+                        )}
                       </div>
 
                       <div className="flex gap-2 pt-6">
@@ -321,6 +361,9 @@ export default function DepartmentsManagement() {
                           onClick={() => handleUpdateDepartment(department.id, {
                             name: department.name.trim(),
                             rest_groups_enabled: department.rest_groups_enabled,
+                            is_paused: department.is_paused,
+                            pause_reason: department.is_paused ? department.pause_reason?.trim() || null : null,
+                            paused_at: department.is_paused ? department.paused_at || new Date().toISOString() : null,
                           })}
                           disabled={savingId === department.id}
                         >
