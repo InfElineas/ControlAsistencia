@@ -153,6 +153,10 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+    background-image:
+      radial-gradient(circle at 0% 0%, hsl(var(--primary) / 0.06), transparent 35%),
+      radial-gradient(circle at 100% 0%, hsl(var(--accent) / 0.08), transparent 30%);
+    background-attachment: fixed;
   }
 
   /* Typography scale */
@@ -176,27 +180,27 @@
 @layer components {
   /* Status badges */
   .status-badge {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-sm;
   }
 
   .status-present {
-    @apply bg-[hsl(var(--status-present)/0.15)] text-[hsl(var(--status-present))];
+    @apply bg-[hsl(var(--status-present)/0.15)] text-[hsl(var(--status-present))] border-[hsl(var(--status-present)/0.3)];
   }
 
   .status-late {
-    @apply bg-[hsl(var(--status-late)/0.15)] text-[hsl(var(--status-late))];
+    @apply bg-[hsl(var(--status-late)/0.15)] text-[hsl(var(--status-late))] border-[hsl(var(--status-late)/0.3)];
   }
 
   .status-absent {
-    @apply bg-[hsl(var(--status-absent)/0.15)] text-[hsl(var(--status-absent))];
+    @apply bg-[hsl(var(--status-absent)/0.15)] text-[hsl(var(--status-absent))] border-[hsl(var(--status-absent)/0.3)];
   }
 
   .status-rest {
-    @apply bg-[hsl(var(--status-rest)/0.15)] text-[hsl(var(--status-rest))];
+    @apply bg-[hsl(var(--status-rest)/0.15)] text-[hsl(var(--status-rest))] border-[hsl(var(--status-rest)/0.3)];
   }
 
   .status-nonworking {
-    @apply bg-[hsl(var(--status-nonworking)/0.5)] text-muted-foreground;
+    @apply bg-[hsl(var(--status-nonworking)/0.5)] text-muted-foreground border-[hsl(var(--status-nonworking)/0.6)];
   }
 
   /* Glass effect cards */
@@ -206,7 +210,7 @@
 
   /* Metric cards */
   .metric-card {
-    @apply p-4 rounded-xl border bg-card shadow-sm transition-all hover:shadow-md;
+    @apply p-4 rounded-2xl border border-border/70 bg-card/95 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md;
   }
 
   /* Geofence indicator */
@@ -285,5 +289,27 @@
   .gradient-text {
     @apply bg-clip-text text-transparent;
     background-image: var(--gradient-hero);
+  }
+}
+
+
+@layer base {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+    border: 2px solid hsl(var(--muted));
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.6);
   }
 }

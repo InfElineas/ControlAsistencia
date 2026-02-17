@@ -30,6 +30,7 @@ export default function Configuration() {
   const [generalConfig, setGeneralConfig] = useState({
     includeHeadsInGlobalReports: false,
     lateToleranceMinutes: 15,
+    vacationDaysPerWorkedDay: 0.0833333333,
   });
   const [savingGeneral, setSavingGeneral] = useState(false);
 
@@ -52,7 +53,7 @@ export default function Configuration() {
       const { data, error } = await supabase
         .from('app_config')
         .select('key, value')
-        .in('key', ['include_heads_in_global_reports', 'late_tolerance_minutes']);
+        .in('key', ['include_heads_in_global_reports', 'late_tolerance_minutes', 'vacation_days_per_worked_day']);
 
       if (error) {
         toast.error(mapGenericActionError(error, 'No se pudo cargar la configuración general.'));
@@ -61,10 +62,12 @@ export default function Configuration() {
 
       const includeHeads = data?.find((item) => item.key === 'include_heads_in_global_reports')?.value;
       const lateTolerance = data?.find((item) => item.key === 'late_tolerance_minutes')?.value;
+      const vacationRate = data?.find((item) => item.key === 'vacation_days_per_worked_day')?.value;
 
       setGeneralConfig({
         includeHeadsInGlobalReports: typeof includeHeads === 'boolean' ? includeHeads : false,
         lateToleranceMinutes: typeof lateTolerance === 'number' ? lateTolerance : 15,
+        vacationDaysPerWorkedDay: typeof vacationRate === 'number' ? vacationRate : 0.0833333333,
       });
     };
 
@@ -109,6 +112,10 @@ export default function Configuration() {
           .from('app_config')
           .update({ value: generalConfig.lateToleranceMinutes })
           .eq('key', 'late_tolerance_minutes'),
+        supabase
+          .from('app_config')
+          .update({ value: generalConfig.vacationDaysPerWorkedDay })
+          .eq('key', 'vacation_days_per_worked_day'),
       ];
 
       const results = await Promise.all(updates);
@@ -357,6 +364,25 @@ export default function Configuration() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Minutos después de la hora de entrada que se consideran tardanza
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Acumulación de vacaciones por día trabajado</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.0001}
+                    value={generalConfig.vacationDaysPerWorkedDay}
+                    onChange={(e) =>
+                      setGeneralConfig((prev) => ({
+                        ...prev,
+                        vacationDaysPerWorkedDay: Number.parseFloat(e.target.value || '0'),
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Ejemplo: 0.0833 ≈ 1 día de vacaciones acumulado cada 12 días trabajados.
                   </p>
                 </div>
 

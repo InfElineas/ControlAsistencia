@@ -7,6 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -30,8 +37,9 @@ import {
   Loader2,
   Search,
   TrendingUp,
+  Eye,
 } from 'lucide-react';
-import { format, subDays } from 'date-fns';
+import { format, startOfMonth, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { exportToXLSX, AttendanceReportRow, formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
@@ -44,6 +52,7 @@ interface Employee {
   email: string;
   department_id: string;
   department_name: string;
+  department_paused: boolean;
 }
 
 interface ProfileWithDepartment {
@@ -52,7 +61,7 @@ interface ProfileWithDepartment {
   full_name: string;
   email: string;
   department_id: string;
-  departments: { name: string } | null;
+  departments: { name: string; is_paused: boolean } | null;
 }
 
 interface AttendanceSummary {
@@ -65,6 +74,22 @@ interface AttendanceSummary {
   outTime: string | null;
   insideGeofence: boolean | null;
   distance: number | null;
+}
+
+interface EmployeeDetails {
+  monthPresentDays: number;
+  monthLateCheckins: number;
+  monthOutsideGeofence: number;
+  monthWorkedHours: number;
+  monthInMarks: number;
+  lastActivityAt: string | null;
+  vacation: {
+    availableDays: number;
+    earnedDays: number;
+    approvedDays: number;
+    pendingDays: number;
+    workedDays: number;
+  };
 }
 
 export default function GlobalPanel() {
@@ -80,6 +105,10 @@ export default function GlobalPanel() {
     to: format(new Date(), 'yyyy-MM-dd'),
   });
   const [includeHeadsInGlobalReports, setIncludeHeadsInGlobalReports] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [employeeDetails, setEmployeeDetails] = useState<EmployeeDetails | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -108,7 +137,7 @@ export default function GlobalPanel() {
         full_name,
         email,
         department_id,
-        departments(name)
+        departments(name, is_paused)
       `);
 
     if (profilesData) {
@@ -133,6 +162,7 @@ export default function GlobalPanel() {
           email: p.email,
           department_id: p.department_id,
           department_name: p.departments?.name || 'Sin departamento',
+          department_paused: p.departments?.is_paused ?? false,
         }));
 
       setEmployees(filteredEmployees);
@@ -159,7 +189,7 @@ export default function GlobalPanel() {
           employeeName: emp.full_name,
           email: emp.email,
           department: emp.department_name,
-          todayStatus: inMark ? 'PRESENTE' : null,
+          todayStatus: emp.department_paused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : null,
           inTime: inMark?.timestamp || null,
           outTime: outMark?.timestamp || null,
           insideGeofence: inMark?.inside_geofence ?? null,
@@ -211,7 +241,7 @@ export default function GlobalPanel() {
             employee_name: emp.full_name,
             employee_email: emp.email,
             department: emp.department_name,
-            status: inMark ? 'PRESENTE' : 'AUSENTE',
+            status: emp.department_paused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : 'AUSENTE',
             in_time: inMark ? formatTime(inMark.timestamp) : null,
             out_time: outMark ? formatTime(outMark.timestamp) : null,
             lateness_minutes: null,
@@ -228,6 +258,88 @@ export default function GlobalPanel() {
     }
 
     setExporting(false);
+  };
+
+  const openEmployeeDetails = async (employeeId: string) => {
+    const employee = employees.find((item) => item.user_id === employeeId);
+    if (!employee) return;
+
+    setSelectedEmployee(employee);
+    setEmployeeDetails(null);
+    setDetailsOpen(true);
+    setDetailsLoading(true);
+
+    try {
+      const monthStart = startOfMonth(new Date());
+
+      const [{ data: monthMarks, error: marksError }, { data: lastMark, error: lastError }, { data: vacationData, error: vacationError }] = await Promise.all([
+        supabase
+          .from('attendance_marks')
+          .select('mark_type, timestamp, inside_geofence, block_reason')
+          .eq('user_id', employeeId)
+          .gte('timestamp', monthStart.toISOString())
+          .order('timestamp', { ascending: true }),
+        supabase
+          .from('attendance_marks')
+          .select('timestamp')
+          .eq('user_id', employeeId)
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .rpc('get_vacation_balance', { _user_id: employeeId, _year: new Date().getFullYear() }),
+      ]);
+
+      if (marksError) throw marksError;
+      if (lastError) throw lastError;
+      if (vacationError) throw vacationError;
+
+      const marks = monthMarks || [];
+      const uniqueInDays = new Set(
+        marks
+          .filter((mark) => mark.mark_type === 'IN')
+          .map((mark) => mark.timestamp.split('T')[0])
+      );
+
+      const lateCheckins = marks.filter(
+        (mark) => mark.mark_type === 'IN' && mark.block_reason === 'LATE_CHECKIN'
+      ).length;
+
+      const outsideGeofenceCount = marks.filter(
+        (mark) => mark.mark_type === 'IN' && !mark.inside_geofence
+      ).length;
+
+      const workedHours = marks.reduce((total, mark, index) => {
+        if (mark.mark_type !== 'IN') return total;
+        const outMark = marks.slice(index + 1).find((candidate) => candidate.mark_type === 'OUT');
+        if (!outMark) return total;
+
+        const diffMs = new Date(outMark.timestamp).getTime() - new Date(mark.timestamp).getTime();
+        return diffMs > 0 ? total + diffMs / (1000 * 60 * 60) : total;
+      }, 0);
+
+      const vacation = vacationData?.[0];
+
+      setEmployeeDetails({
+        monthPresentDays: uniqueInDays.size,
+        monthLateCheckins: lateCheckins,
+        monthOutsideGeofence: outsideGeofenceCount,
+        monthWorkedHours: workedHours,
+        monthInMarks: marks.filter((mark) => mark.mark_type === 'IN').length,
+        lastActivityAt: lastMark?.timestamp || null,
+        vacation: {
+          availableDays: vacation?.available_days ?? 0,
+          earnedDays: vacation?.earned_days ?? 0,
+          approvedDays: vacation?.approved_days ?? 0,
+          pendingDays: vacation?.pending_days ?? 0,
+          workedDays: vacation?.worked_days ?? 0,
+        },
+      });
+    } catch (error) {
+      toast.error('No se pudieron cargar los detalles del trabajador');
+    }
+
+    setDetailsLoading(false);
   };
 
   const metrics = {
@@ -368,6 +480,7 @@ export default function GlobalPanel() {
                     <TableHead>Entrada</TableHead>
                     <TableHead>Salida</TableHead>
                     <TableHead>Ubicación</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -407,6 +520,16 @@ export default function GlobalPanel() {
                           </span>
                         )}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEmployeeDetails(row.userId)}
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          Ver detalles
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -414,6 +537,81 @@ export default function GlobalPanel() {
             </div>
           </CardContent>
         </Card>
+
+        <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Detalle de trabajador</DialogTitle>
+              <DialogDescription>
+                {selectedEmployee
+                  ? `${selectedEmployee.full_name} · ${selectedEmployee.department_name}`
+                  : 'Métricas de asistencia y vacaciones'}
+              </DialogDescription>
+            </DialogHeader>
+
+            {detailsLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : employeeDetails ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-muted-foreground">Asistencia (mes actual)</p>
+                    <p className="text-xl font-semibold">{employeeDetails.monthPresentDays} días</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-muted-foreground">Última actividad</p>
+                    <p className="text-sm font-medium">
+                      {employeeDetails.lastActivityAt
+                        ? format(new Date(employeeDetails.lastActivityAt), "dd 'de' MMM yyyy, HH:mm", { locale: es })
+                        : 'Sin registros'}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-muted-foreground">Horas trabajadas (mes actual)</p>
+                    <p className="text-xl font-semibold">{employeeDetails.monthWorkedHours.toFixed(1)} h</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-muted-foreground">Entradas con tardanza</p>
+                    <p className="text-xl font-semibold">{employeeDetails.monthLateCheckins}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-muted-foreground">Entradas fuera de geocerca</p>
+                    <p className="text-xl font-semibold">{employeeDetails.monthOutsideGeofence}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-muted-foreground">Marcajes de entrada (mes actual)</p>
+                    <p className="text-xl font-semibold">{employeeDetails.monthInMarks}</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="sm:col-span-2">
+                  <CardContent className="pt-4 space-y-1">
+                    <p className="text-muted-foreground">Vacaciones</p>
+                    <p>Días acumulados: <span className="font-semibold">{employeeDetails.vacation.earnedDays.toFixed(2)}</span></p>
+                    <p>Días disponibles: <span className="font-semibold">{employeeDetails.vacation.availableDays.toFixed(2)}</span></p>
+                    <p>Días aprobados: <span className="font-semibold">{employeeDetails.vacation.approvedDays.toFixed(2)}</span></p>
+                    <p>Días pendientes: <span className="font-semibold">{employeeDetails.vacation.pendingDays.toFixed(2)}</span></p>
+                    <p>Días trabajados del año: <span className="font-semibold">{employeeDetails.vacation.workedDays}</span></p>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No hay datos para mostrar.</p>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

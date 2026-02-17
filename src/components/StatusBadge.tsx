@@ -18,9 +18,5 @@ const statusConfig: Record<Status, { label: string; className: string }> = {
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   const config = statusConfig[status];
 
-  return (
-    <span className={cn('status-badge', config.className, className)}>
-      {config.label}
-    </span>
-  );
+  return <span className={cn('status-badge shadow-sm border border-transparent', config.className, className)}>{config.label}</span>;
 }

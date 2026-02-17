@@ -63,6 +63,9 @@ export function mapAttendanceError(error: unknown): string {
   if (includesAny(raw, ['hora de entrada excedida', 'entrada anticipada no permitida', 'salida se habilita al salir de la zona'])) {
     return message;
   }
+  if (includesAny(raw, ['on_vacation', 'vacaciones aprobadas', 'vacation'])) {
+    return 'No puedes registrar asistencia durante vacaciones aprobadas.';
+  }
   if (includesAny(raw, ['departamento sin horario'])) {
     return 'Tu departamento no tiene un horario configurado para registrar entrada.';
   }

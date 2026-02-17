@@ -29,6 +29,7 @@ interface AttendanceState {
 interface MarkAttendanceResult {
   error: string | null;
   code?: string;
+  message?: string;
 }
 
 interface FunctionErrorPayload {
@@ -138,6 +139,9 @@ export function useAttendance() {
 
       // Call the edge function for validated attendance
       const response = await supabase.functions.invoke('validate-attendance', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: {
           mark_type: markType,
           latitude: geoData.latitude,
@@ -164,7 +168,7 @@ export function useAttendance() {
       }
 
       await fetchTodayMarks();
-      return { error: null };
+      return { error: null, message: result.message };
     } catch (error: unknown) {
       console.error('Attendance error:', error);
       return { error: getErrorMessage(error, 'Error desconocido'), code: 'UNKNOWN_ERROR' };

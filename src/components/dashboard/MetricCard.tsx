@@ -20,13 +20,13 @@ const variantStyles = {
 export function MetricCard({ title, value, subtitle, icon: Icon, variant = 'default' }: MetricCardProps) {
   return (
     <div className="metric-card">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-sm text-muted-foreground">{title}</p>
-          <p className={cn('text-2xl font-bold mt-1', variantStyles[variant])}>{value}</p>
-          {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
+          <p className={cn('text-2xl md:text-3xl font-bold mt-1', variantStyles[variant])}>{value}</p>
+          {subtitle && <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p>}
         </div>
-        <div className={cn('p-2 rounded-lg bg-secondary', variantStyles[variant])}>
+        <div className={cn('p-2.5 rounded-xl bg-secondary/70 border border-border/60', variantStyles[variant])}>
           <Icon className="h-5 w-5" />
         </div>
       </div>
