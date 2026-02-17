@@ -171,16 +171,19 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          rest_groups_enabled: boolean
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          rest_groups_enabled?: boolean
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          rest_groups_enabled?: boolean
         }
         Relationships: []
       }
@@ -224,6 +227,7 @@ export type Database = {
           email: string
           full_name: string
           id: string
+          phone: string | null
           updated_at: string
           user_id: string
         }
@@ -233,6 +237,7 @@ export type Database = {
           email: string
           full_name: string
           id?: string
+          phone?: string | null
           updated_at?: string
           user_id: string
         }
@@ -242,12 +247,139 @@ export type Database = {
           email?: string
           full_name?: string
           id?: string
+          phone?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "profiles_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vacation_requests: {
+        Row: {
+          created_at: string
+          department_id: string
+          end_date: string
+          id: string
+          reason: string | null
+          requested_days: number
+          review_comment: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          end_date: string
+          id?: string
+          reason?: string | null
+          requested_days: number
+          review_comment?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          end_date?: string
+          id?: string
+          reason?: string | null
+          requested_days?: number
+          review_comment?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          start_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vacation_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rest_group_members: {
+        Row: {
+          created_at: string
+          effective_from: string
+          group_id: string
+          id: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          effective_from?: string
+          group_id: string
+          id?: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          effective_from?: string
+          group_id?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rest_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "rest_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rest_groups: {
+        Row: {
+          created_at: string
+          days_of_week: number[]
+          department_id: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days_of_week?: number[]
+          department_id: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days_of_week?: number[]
+          department_id?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rest_groups_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
@@ -343,6 +475,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_vacation_request: {
+        Args: { _request_id: string }
+        Returns: {
+          created_at: string
+          department_id: string
+          end_date: string
+          id: string
+          reason: string | null
+          requested_days: number
+          review_comment: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+      }
+      get_vacation_accrual_rate: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      get_vacation_balance: {
+        Args: { _user_id: string; _year?: number }
+        Returns: {
+          accrual_rate: number
+          approved_days: number
+          available_days: number
+          earned_days: number
+          pending_days: number
+          worked_days: number
+        }[]
+      }
       get_user_department: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -355,6 +520,42 @@ export type Database = {
       is_head_of_department: {
         Args: { _dept_id: string; _user_id: string }
         Returns: boolean
+      }
+      request_vacation: {
+        Args: { _end_date: string; _reason?: string; _start_date: string }
+        Returns: {
+          created_at: string
+          department_id: string
+          end_date: string
+          id: string
+          reason: string | null
+          requested_days: number
+          review_comment: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+      }
+      review_vacation_request: {
+        Args: { _decision: string; _request_id: string; _review_comment?: string }
+        Returns: {
+          created_at: string
+          department_id: string
+          end_date: string
+          id: string
+          reason: string | null
+          requested_days: number
+          review_comment: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
       }
       validate_attendance_mark: {
         Args: { _mark_type: string; _user_id: string }
