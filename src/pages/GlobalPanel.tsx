@@ -44,6 +44,7 @@ interface Employee {
   email: string;
   department_id: string;
   department_name: string;
+  department_paused: boolean;
 }
 
 interface ProfileWithDepartment {
@@ -52,7 +53,7 @@ interface ProfileWithDepartment {
   full_name: string;
   email: string;
   department_id: string;
-  departments: { name: string } | null;
+  departments: { name: string; is_paused: boolean } | null;
 }
 
 interface AttendanceSummary {
@@ -108,7 +109,7 @@ export default function GlobalPanel() {
         full_name,
         email,
         department_id,
-        departments(name)
+        departments(name, is_paused)
       `);
 
     if (profilesData) {
@@ -133,6 +134,7 @@ export default function GlobalPanel() {
           email: p.email,
           department_id: p.department_id,
           department_name: p.departments?.name || 'Sin departamento',
+          department_paused: p.departments?.is_paused ?? false,
         }));
 
       setEmployees(filteredEmployees);
@@ -159,7 +161,7 @@ export default function GlobalPanel() {
           employeeName: emp.full_name,
           email: emp.email,
           department: emp.department_name,
-          todayStatus: inMark ? 'PRESENTE' : null,
+          todayStatus: emp.department_paused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : null,
           inTime: inMark?.timestamp || null,
           outTime: outMark?.timestamp || null,
           insideGeofence: inMark?.inside_geofence ?? null,
@@ -211,7 +213,7 @@ export default function GlobalPanel() {
             employee_name: emp.full_name,
             employee_email: emp.email,
             department: emp.department_name,
-            status: inMark ? 'PRESENTE' : 'AUSENTE',
+            status: emp.department_paused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : 'AUSENTE',
             in_time: inMark ? formatTime(inMark.timestamp) : null,
             out_time: outMark ? formatTime(outMark.timestamp) : null,
             lateness_minutes: null,
