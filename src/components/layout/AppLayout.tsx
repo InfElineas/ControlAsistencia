@@ -51,11 +51,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const departmentName = departments.find((department) => department.id === profile?.department_id)?.name;
 
   const filteredNavItems = navItems.filter((item) => {
-    // Check if user is excluded from this item
     if (item.excludeRoles && role && item.excludeRoles.includes(role)) {
       return false;
     }
-    // Check if user has required role
     if (item.roles && (!role || !item.roles.includes(role))) {
       return false;
     }
@@ -72,14 +70,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             to={item.href}
             onClick={() => setMobileMenuOpen(false)}
             className={cn(
-              'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
+              'group flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all duration-200',
               isActive
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                ? 'border-primary/30 bg-primary text-primary-foreground shadow-sm'
+                : 'border-transparent text-muted-foreground hover:border-border hover:bg-secondary/60 hover:text-foreground'
             )}
           >
-            <item.icon className="h-5 w-5" />
-            <span>{item.label}</span>
+            <item.icon className="h-5 w-5 transition-transform group-hover:scale-105" />
+            <span className="text-sm font-medium">{item.label}</span>
           </Link>
         );
       })}
@@ -88,8 +86,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card border-b z-50 px-4 flex items-center justify-between">
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card/95 backdrop-blur-md border-b z-50 px-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <img
             src="/logo-control-asistencia.svg"
@@ -98,34 +95,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           />
           <span className="font-semibold text-sm leading-tight">Asistencia ELINEAS</span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        >
+        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
       </header>
 
-      {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40"
-          onClick={() => setMobileMenuOpen(false)}
-        />
+        <div className="lg:hidden fixed inset-0 bg-background/70 backdrop-blur-sm z-40" onClick={() => setMobileMenuOpen(false)} />
       )}
 
-      {/* Mobile Sidebar */}
       <aside
         className={cn(
-          'lg:hidden fixed top-16 left-0 bottom-0 w-64 bg-card border-r z-50 transform transition-transform',
+          'lg:hidden fixed top-16 left-0 bottom-0 w-72 bg-card/95 backdrop-blur-md border-r z-50 transform transition-transform duration-200',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         <div className="p-4 space-y-2">
           <NavLinks />
         </div>
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t">
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-card/70">
           <div className="mb-3">
             <p className="font-medium text-sm">{profile?.full_name}</p>
             <p className="text-xs text-muted-foreground capitalize">{role?.replace('_', ' ')}</p>
@@ -138,9 +126,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-64 bg-card border-r">
-        <div className="p-5 border-b bg-muted/20">
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-72 bg-card/95 backdrop-blur-md border-r">
+        <div className="p-5 border-b bg-muted/30">
           <div className="flex items-center gap-3">
             <img
               src="/logo-control-asistencia.svg"
@@ -157,7 +144,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 p-4 space-y-1">
           <NavLinks />
         </nav>
-        <div className="p-4 border-t">
+        <div className="p-4 border-t bg-muted/20">
           <div className="mb-3">
             <p className="font-medium text-sm">{profile?.full_name}</p>
             <p className="text-xs text-muted-foreground capitalize">{role?.replace('_', ' ')}</p>
@@ -170,9 +157,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="lg:pl-64 pt-16 lg:pt-0 min-h-screen">
-        <div className="p-4 lg:p-8">{children}</div>
+      <main className="lg:pl-72 pt-16 lg:pt-0 min-h-screen">
+        <div className="p-4 lg:p-8 max-w-[1600px] mx-auto">{children}</div>
       </main>
     </div>
   );
