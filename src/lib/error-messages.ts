@@ -53,6 +53,9 @@ export function mapUserManagementError(error: unknown, action: 'fetch' | 'update
 
 
   if (action === 'delete') {
+    if (includesAny(raw, ['function not found', 'failed to send a request to the edge function', 'edge function'])) {
+      return 'La función de eliminación no está disponible. Verifica que delete-user esté desplegada en Supabase Functions.';
+    }
     if (includesAny(raw, ['último gestor global', 'ultimo gestor global'])) {
       return 'No puedes eliminar al último gestor global del sistema.';
     }

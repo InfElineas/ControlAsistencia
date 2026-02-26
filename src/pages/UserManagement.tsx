@@ -46,6 +46,26 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { Loader2, UserPlus, Shield, Users, Edit, Filter, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 
+interface FunctionErrorPayload {
+  error?: string;
+  message?: string;
+}
+
+function hasFunctionContext(error: unknown): error is { context: Response } {
+  return typeof error === 'object' && error !== null && 'context' in error;
+}
+
+async function resolveFunctionErrorMessage(error: unknown): Promise<string | null> {
+  if (!hasFunctionContext(error)) return null;
+
+  try {
+    const payload = (await error.context.clone().json()) as FunctionErrorPayload;
+    return payload.error || payload.message || null;
+  } catch {
+    return null;
+  }
+}
+
 interface UserWithRole {
   id: string;
   user_id: string;
@@ -298,9 +318,10 @@ export default function UserManagement() {
       setDeletingUser(null);
       fetchUsers();
     } catch (error: unknown) {
+      const detailedMessage = await resolveFunctionErrorMessage(error);
       toast({
         title: 'Error',
-        description: mapUserManagementError(error, 'delete'),
+        description: detailedMessage || mapUserManagementError(error, 'delete'),
         variant: 'destructive',
       });
     } finally {

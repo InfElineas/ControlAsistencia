@@ -204,6 +204,19 @@ export default function Department() {
 
     try {
       const reportData: AttendanceReportRow[] = [];
+      const { data: absenceReviews } = await supabase
+        .from('attendance_absence_reviews')
+        .select('user_id, date, is_justified')
+        .gte('date', dateRange.from)
+        .lte('date', dateRange.to)
+        .in('user_id', employees.map((employee) => employee.user_id));
+
+      const absenceMap = new Map(
+        (absenceReviews || []).map((review) => [
+          `${review.user_id}_${review.date}`,
+          review.is_justified ? 'JUSTIFICADA' : 'NO_JUSTIFICADA',
+        ])
+      );
 
       for (const emp of employees) {
         const { data: marks } = await supabase
@@ -247,6 +260,10 @@ export default function Department() {
             lateness_minutes: inMark
               ? calculateLateMinutes(inMark.timestamp, departmentSchedule.checkin_end_time, departmentSchedule.timezone)
               : null,
+            absence_justification:
+              !inMark && !departmentPaused
+                ? ((absenceMap.get(`${emp.user_id}_${dateStr}`) as 'JUSTIFICADA' | 'NO_JUSTIFICADA' | undefined) || 'PENDIENTE')
+                : '-',
             inside_geofence: inMark?.inside_geofence ?? null,
             distance_m: inMark?.distance_to_center ?? null,
           });
