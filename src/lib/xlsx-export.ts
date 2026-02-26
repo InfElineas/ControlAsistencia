@@ -11,6 +11,18 @@ export interface AttendanceReportRow {
   lateness_minutes: number | null;
   inside_geofence: boolean | null;
   distance_m: number | null;
+  absence_justification?: 'JUSTIFICADA' | 'NO_JUSTIFICADA' | 'PENDIENTE' | '-';
+}
+
+function formatMinutesAsHours(value: number | null): string {
+  if (value === null || value <= 0) return '-';
+  const hours = Math.floor(value / 60)
+    .toString()
+    .padStart(2, '0');
+  const minutes = Math.floor(value % 60)
+    .toString()
+    .padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
 export function exportToXLSX(data: AttendanceReportRow[], filename: string) {
@@ -18,7 +30,13 @@ export function exportToXLSX(data: AttendanceReportRow[], filename: string) {
   const wb = XLSX.utils.book_new();
   
   // Convert data to worksheet format with headers in Spanish
-  const wsData = data.map(row => ({
+  const wsData = [...data]
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      if (a.department !== b.department) return a.department.localeCompare(b.department);
+      return a.employee_name.localeCompare(b.employee_name);
+    })
+    .map(row => ({
     'Fecha': row.date,
     'Empleado': row.employee_name,
     'Email': row.employee_email,
@@ -26,7 +44,8 @@ export function exportToXLSX(data: AttendanceReportRow[], filename: string) {
     'Estado': row.status,
     'Hora Entrada': row.in_time || '-',
     'Hora Salida': row.out_time || '-',
-    'Minutos Tardanza': row.lateness_minutes ?? '-',
+    'Tardanza (h:mm)': formatMinutesAsHours(row.lateness_minutes),
+    'Ausencia Justificada': row.absence_justification ?? '-',
     'Dentro Geofence': row.inside_geofence === null ? '-' : (row.inside_geofence ? 'Sí' : 'No'),
     'Distancia (m)': row.distance_m ?? '-',
   }));
@@ -42,7 +61,8 @@ export function exportToXLSX(data: AttendanceReportRow[], filename: string) {
     { wch: 15 },  // Estado
     { wch: 12 },  // Hora Entrada
     { wch: 12 },  // Hora Salida
-    { wch: 18 },  // Minutos Tardanza
+    { wch: 16 },  // Tardanza (h:mm)
+    { wch: 22 },  // Ausencia Justificada
     { wch: 15 },  // Dentro Geofence
     { wch: 12 },  // Distancia
   ];
