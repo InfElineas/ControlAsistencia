@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Defer profile fetch with setTimeout to avoid deadlock
         if (session?.user) {
           setTimeout(() => {
-            fetchUserProfile(session.user.id);
+            fetchUserProfile(session.user);
           }, 0);
         } else {
           setProfile(null);
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserProfile(session.user.id);
+        fetchUserProfile(session.user);
       } else {
         setLoading(false);
       }
@@ -74,29 +74,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = async (authUser: User) => {
     try {
       // Fetch profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('user_id', userId)
-        .single();
+        .eq('user_id', authUser.id)
+        .maybeSingle();
 
       if (profileError) throw profileError;
-      setProfile(profileData as UserProfile);
+      setProfile(
+        (profileData as UserProfile) || {
+          id: '',
+          user_id: authUser.id,
+          email: authUser.email ?? '',
+          full_name:
+            (typeof authUser.user_metadata?.full_name === 'string' && authUser.user_metadata.full_name) ||
+            authUser.email ||
+            'Usuario',
+          department_id:
+            (typeof authUser.user_metadata?.department_id === 'string' && authUser.user_metadata.department_id) ||
+            '',
+          phone:
+            (typeof authUser.user_metadata?.phone === 'string' && authUser.user_metadata.phone) ||
+            null,
+        }
+      );
 
       // Fetch role
       const { data: roleData, error: roleError } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', userId)
-        .single();
+        .eq('user_id', authUser.id)
+        .maybeSingle();
 
       if (roleError) throw roleError;
-      setRole(roleData.role as AppRole);
+      setRole((roleData?.role as AppRole) || 'employee');
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      setProfile((prevProfile) =>
+        prevProfile || {
+          id: '',
+          user_id: authUser.id,
+          email: authUser.email ?? '',
+          full_name:
+            (typeof authUser.user_metadata?.full_name === 'string' && authUser.user_metadata.full_name) ||
+            authUser.email ||
+            'Usuario',
+          department_id:
+            (typeof authUser.user_metadata?.department_id === 'string' && authUser.user_metadata.department_id) ||
+            '',
+          phone:
+            (typeof authUser.user_metadata?.phone === 'string' && authUser.user_metadata.phone) ||
+            null,
+        }
+      );
+      setRole((prevRole) => prevRole || 'employee');
     } finally {
       setLoading(false);
     }
