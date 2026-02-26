@@ -23,8 +23,11 @@ export function mapAuthError(error: unknown, action: 'signin' | 'signup'): strin
   if (includesAny(raw, ['password'])) {
     return 'La contraseña no cumple los requisitos mínimos.';
   }
+  if (includesAny(raw, ['no se pudo determinar la url de confirmación', 'vite_public_app_url'])) {
+    return 'Configuración incompleta: define VITE_PUBLIC_APP_URL con tu dominio público para enviar enlaces de confirmación válidos.';
+  }
   if (includesAny(raw, ['rate limit', 'too many requests'])) {
-    return 'Se alcanzó el límite de intentos. Intenta más tarde.';
+    return 'Se alcanzó el límite de registros del servidor. Intenta más tarde o contacta al administrador para ampliar los límites de Supabase/Auth.';
   }
 
   return 'No fue posible crear la cuenta. Intenta nuevamente.';
