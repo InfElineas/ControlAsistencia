@@ -27,6 +27,17 @@ export function ProtectedRoute({ children, allowedRoles, excludedRoles }: Protec
     return <Navigate to="/auth" replace />;
   }
 
+  if ((allowedRoles || excludedRoles) && !role) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Validando permisos...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (excludedRoles && role && excludedRoles.includes(role)) {
     return <Navigate to="/" replace />;
   }
