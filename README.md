@@ -64,6 +64,20 @@ This project is built with:
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
+### Configuración necesaria para registro de usuarios en dominio propio
+
+Si el enlace de confirmación de registro está llegando con `localhost`, configura estos puntos:
+
+1. Define la variable de entorno `VITE_PUBLIC_APP_URL` con tu dominio público (ejemplo: `https://tu-dominio.com`).
+2. En Supabase ve a **Authentication → URL Configuration** y actualiza:
+   - **Site URL**: tu dominio público.
+   - **Redirect URLs**: incluye tu dominio público (por ejemplo `https://tu-dominio.com/*`).
+
+Si múltiples usuarios se registran al mismo tiempo y aparece error de límite de intentos, revisa en Supabase:
+
+- **Authentication → Rate Limits** para aumentar los límites de registro/correos.
+- Configurar un **SMTP propio** para evitar límites estrictos del proveedor por defecto.
+
 ## Can I connect a custom domain to my Lovable project?
 
 Yes, you can!
