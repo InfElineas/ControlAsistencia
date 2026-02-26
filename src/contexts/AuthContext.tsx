@@ -3,21 +3,6 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveAuthRedirectUrl } from '@/lib/auth-redirect';
 
-function resolveEmailRedirectUrl(): string {
-  const configuredUrl = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
-
-  if (configuredUrl) {
-    try {
-      const parsedUrl = new URL(configuredUrl);
-      return `${parsedUrl.origin}/`;
-    } catch {
-      console.warn('VITE_PUBLIC_APP_URL no es una URL válida. Se usará el origen actual.');
-    }
-  }
-
-  return `${window.location.origin}/`;
-}
-
 export type AppRole = 'employee' | 'department_head' | 'global_manager';
 
 interface UserProfile {

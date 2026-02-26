@@ -86,7 +86,7 @@ export default function Auth() {
 
         setIsLogin(true);
         setPassword('');
-        setSuccessMessage('Registro exitoso. Revisa tu Gmail para activar y confirmar tu cuenta antes de iniciar sesión.');
+        setSuccessMessage('Registro exitoso. Ya puedes iniciar sesión con tu correo y contraseña.');
         setLoading(false);
         return;
       }
