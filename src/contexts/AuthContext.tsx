@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { resolveAuthRedirectUrl } from '@/lib/auth-redirect';
 
 function resolveEmailRedirectUrl(): string {
   const configuredUrl = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
@@ -125,7 +126,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signUp = async (email: string, password: string, fullName: string, departmentId: string, phone: string) => {
-    const redirectUrl = resolveEmailRedirectUrl();
+    const redirectUrl = resolveAuthRedirectUrl(window.location.origin);
+
+    if (!redirectUrl) {
+      return {
+        error: new Error('No se pudo determinar la URL de confirmación. Configura VITE_PUBLIC_APP_URL con tu dominio público.'),
+      };
+    }
     
     const { error } = await supabase.auth.signUp({
       email,

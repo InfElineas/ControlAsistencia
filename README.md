@@ -69,9 +69,26 @@ Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and 
 Si el enlace de confirmación de registro está llegando con `localhost`, configura estos puntos:
 
 1. Define la variable de entorno `VITE_PUBLIC_APP_URL` con tu dominio público (ejemplo: `https://tu-dominio.com`).
-2. En Supabase ve a **Authentication → URL Configuration** y actualiza:
-   - **Site URL**: tu dominio público.
-   - **Redirect URLs**: incluye tu dominio público (por ejemplo `https://tu-dominio.com/*`).
+2. (Opcional) Define `VITE_AUTH_REDIRECT_PATH` si quieres que el correo abra una ruta específica (ejemplo: `/auth/callback`).
+3. En Supabase ve a **Authentication → URL Configuration** y actualiza:
+   - **Site URL**: `https://tu-dominio.com`
+   - **Redirect URLs**: agrega al menos:
+     - `https://tu-dominio.com/*`
+     - `https://www.tu-dominio.com/*` (si usas subdominio `www`)
+
+Checklist rápida (pantalla por pantalla):
+
+- **Supabase → Authentication → URL Configuration**
+  - Site URL = `https://tu-dominio.com`
+  - Redirect URL #1 = `https://tu-dominio.com/*`
+  - Redirect URL #2 = `https://www.tu-dominio.com/*` (si aplica)
+- **Servidor/hosting del frontend**
+  - `VITE_PUBLIC_APP_URL=https://tu-dominio.com`
+  - `VITE_AUTH_REDIRECT_PATH=/` (o `/auth/callback`)
+- **Deploy**
+  - Recompila y vuelve a publicar (las variables `VITE_*` se leen en build time)
+
+Si `VITE_PUBLIC_APP_URL` no está definido y la app corre desde `localhost`, el registro falla de forma explícita para evitar enviar correos con enlaces inválidos.
 
 Si múltiples usuarios se registran al mismo tiempo y aparece error de límite de intentos, revisa en Supabase:
 
