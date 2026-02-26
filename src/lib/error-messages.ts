@@ -24,7 +24,7 @@ export function mapAuthError(error: unknown, action: 'signin' | 'signup'): strin
     return 'La contraseña no cumple los requisitos mínimos.';
   }
   if (includesAny(raw, ['rate limit', 'too many requests'])) {
-    return 'Se alcanzó el límite de intentos. Intenta más tarde.';
+    return 'Se alcanzó el límite de registros del servidor. Intenta más tarde o contacta al administrador para ampliar los límites de Supabase/Auth.';
   }
 
   return 'No fue posible crear la cuenta. Intenta nuevamente.';
