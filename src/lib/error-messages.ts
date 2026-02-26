@@ -33,7 +33,7 @@ export function mapAuthError(error: unknown, action: 'signin' | 'signup'): strin
   return 'No fue posible crear la cuenta. Intenta nuevamente.';
 }
 
-export function mapUserManagementError(error: unknown, action: 'fetch' | 'update' | 'create'): string {
+export function mapUserManagementError(error: unknown, action: 'fetch' | 'update' | 'create' | 'delete'): string {
   const raw = getErrorMessage(error).toLowerCase();
 
   if (includesAny(raw, ['permission denied', 'not authorized', 'forbidden', 'unauthorized'])) {
@@ -50,6 +50,18 @@ export function mapUserManagementError(error: unknown, action: 'fetch' | 'update
   if (action === 'update') {
     return 'No fue posible actualizar el usuario. Intenta nuevamente.';
   }
+
+
+  if (action === 'delete') {
+    if (includesAny(raw, ['último gestor global', 'ultimo gestor global'])) {
+      return 'No puedes eliminar al último gestor global del sistema.';
+    }
+    if (includesAny(raw, ['tu propio usuario'])) {
+      return 'No puedes eliminar tu propio usuario.';
+    }
+    return 'No fue posible eliminar el usuario. Intenta nuevamente.';
+  }
+
 
   return 'No fue posible cargar los usuarios. Intenta nuevamente.';
 }
