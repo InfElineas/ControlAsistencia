@@ -29,23 +29,35 @@ import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { exportToXLSX, AttendanceReportRow, formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
+import { calculateLateMinutes } from '@/lib/attendance-metrics';
 
 interface DepartmentEmployee {
   id: string;
   user_id: string;
   full_name: string;
   email: string;
+  phone: string | null;
+  role: string;
+}
+
+interface AbsenceReview {
+  is_justified: boolean;
+  notes: string | null;
 }
 
 interface AttendanceSummary {
   userId: string;
   employeeName: string;
   email: string;
+  phone: string | null;
+  role: string;
   todayStatus: 'PRESENTE' | 'TARDE' | 'AUSENTE' | 'DESCANSO' | 'NO_LABORABLE' | null;
   inTime: string | null;
   outTime: string | null;
+  lateMinutes: number;
   insideGeofence: boolean | null;
   distance: number | null;
+  absenceReview: AbsenceReview | null;
 }
 
 export default function Department() {
@@ -54,6 +66,11 @@ export default function Department() {
   const [attendance, setAttendance] = useState<AttendanceSummary[]>([]);
   const [departmentName, setDepartmentName] = useState('');
   const [departmentPaused, setDepartmentPaused] = useState(false);
+  const [departmentSchedule, setDepartmentSchedule] = useState<{ checkin_end_time: string | null; timezone: string | null }>({
+    checkin_end_time: null,
+    timezone: null,
+  });
+  const [reviewingUserId, setReviewingUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState('');
@@ -75,6 +92,17 @@ export default function Department() {
       .eq('id', profile.department_id)
       .single();
 
+    const { data: scheduleData } = await supabase
+      .from('department_schedules')
+      .select('checkin_end_time, timezone')
+      .eq('department_id', profile.department_id)
+      .maybeSingle();
+
+    setDepartmentSchedule({
+      checkin_end_time: scheduleData?.checkin_end_time ?? null,
+      timezone: scheduleData?.timezone ?? null,
+    });
+
     if (deptData) {
       setDepartmentName(deptData.name);
       currentDepartmentPaused = Boolean(deptData.is_paused);
@@ -84,7 +112,7 @@ export default function Department() {
     // Fetch employees in department (excluding department heads and global managers)
     const { data: empData } = await supabase
       .from('profiles')
-      .select('id, user_id, full_name, email')
+      .select('id, user_id, full_name, email, phone')
       .eq('department_id', profile.department_id);
 
     // Filter out department heads and global managers from attendance statistics
@@ -93,8 +121,18 @@ export default function Department() {
       .select('user_id')
       .in('role', ['department_head', 'global_manager']);
 
+    const { data: rolesData } = await supabase
+      .from('user_roles')
+      .select('user_id, role');
+
     const excludedUserIds = new Set(excludedRoles?.map((r) => r.user_id) || []);
-    const filteredEmpData = empData?.filter((p) => !excludedUserIds.has(p.user_id)) || [];
+    const roleMap = new Map((rolesData || []).map((r) => [r.user_id, r.role]));
+    const filteredEmpData = (empData || [])
+      .filter((p) => !excludedUserIds.has(p.user_id))
+      .map((p) => ({
+        ...p,
+        role: roleMap.get(p.user_id) || 'employee',
+      }));
 
     if (filteredEmpData.length > 0 || empData) {
       setEmployees(filteredEmpData);
@@ -104,6 +142,17 @@ export default function Department() {
       today.setHours(0, 0, 0, 0);
 
       const summaries: AttendanceSummary[] = [];
+      const todayDate = format(today, 'yyyy-MM-dd');
+
+      const { data: absenceReviews } = await supabase
+        .from('attendance_absence_reviews')
+        .select('user_id, is_justified, notes')
+        .eq('date', todayDate)
+        .in('user_id', filteredEmpData.map((emp) => emp.user_id));
+
+      const reviewMap = new Map(
+        (absenceReviews || []).map((review) => [review.user_id, { is_justified: review.is_justified, notes: review.notes }])
+      );
 
       for (const emp of filteredEmpData) {
         const { data: marks } = await supabase
@@ -120,11 +169,21 @@ export default function Department() {
           userId: emp.user_id,
           employeeName: emp.full_name,
           email: emp.email,
-          todayStatus: currentDepartmentPaused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : null,
+          phone: emp.phone,
+          role: emp.role,
+          todayStatus: currentDepartmentPaused
+            ? 'NO_LABORABLE'
+            : inMark
+              ? (calculateLateMinutes(inMark.timestamp, scheduleData?.checkin_end_time ?? null, scheduleData?.timezone ?? null) > 0 ? 'TARDE' : 'PRESENTE')
+              : 'AUSENTE',
           inTime: inMark?.timestamp || null,
           outTime: outMark?.timestamp || null,
+          lateMinutes: inMark
+            ? calculateLateMinutes(inMark.timestamp, scheduleData?.checkin_end_time ?? null, scheduleData?.timezone ?? null)
+            : 0,
           insideGeofence: inMark?.inside_geofence ?? null,
           distance: inMark?.distance_to_center ?? null,
+          absenceReview: reviewMap.get(emp.user_id) ?? null,
         });
       }
 
@@ -145,6 +204,19 @@ export default function Department() {
 
     try {
       const reportData: AttendanceReportRow[] = [];
+      const { data: absenceReviews } = await supabase
+        .from('attendance_absence_reviews')
+        .select('user_id, date, is_justified')
+        .gte('date', dateRange.from)
+        .lte('date', dateRange.to)
+        .in('user_id', employees.map((employee) => employee.user_id));
+
+      const absenceMap = new Map(
+        (absenceReviews || []).map((review) => [
+          `${review.user_id}_${review.date}`,
+          review.is_justified ? 'JUSTIFICADA' : 'NO_JUSTIFICADA',
+        ])
+      );
 
       for (const emp of employees) {
         const { data: marks } = await supabase
@@ -178,10 +250,20 @@ export default function Department() {
             employee_name: emp.full_name,
             employee_email: emp.email,
             department: departmentName,
-            status: departmentPaused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : 'AUSENTE',
+            status: departmentPaused
+              ? 'NO_LABORABLE'
+              : inMark
+                ? (calculateLateMinutes(inMark.timestamp, departmentSchedule.checkin_end_time, departmentSchedule.timezone) > 0 ? 'TARDE' : 'PRESENTE')
+                : 'AUSENTE',
             in_time: inMark ? formatTime(inMark.timestamp) : null,
             out_time: outMark ? formatTime(outMark.timestamp) : null,
-            lateness_minutes: null, // Could calculate based on config
+            lateness_minutes: inMark
+              ? calculateLateMinutes(inMark.timestamp, departmentSchedule.checkin_end_time, departmentSchedule.timezone)
+              : null,
+            absence_justification:
+              !inMark && !departmentPaused
+                ? ((absenceMap.get(`${emp.user_id}_${dateStr}`) as 'JUSTIFICADA' | 'NO_JUSTIFICADA' | undefined) || 'PENDIENTE')
+                : '-',
             inside_geofence: inMark?.inside_geofence ?? null,
             distance_m: inMark?.distance_to_center ?? null,
           });
@@ -202,8 +284,58 @@ export default function Department() {
 
   const metrics = {
     total: employees.length,
-    present: attendance.filter((a) => a.todayStatus === 'PRESENTE').length,
-    absent: attendance.filter((a) => !a.todayStatus).length,
+    present: attendance.filter((a) => a.todayStatus === 'PRESENTE' || a.todayStatus === 'TARDE').length,
+    absent: attendance.filter((a) => a.todayStatus === 'AUSENTE').length,
+  };
+
+  const handleSetAbsenceReview = async (targetUserId: string, isJustified: boolean) => {
+    try {
+      setReviewingUserId(targetUserId);
+      const todayDate = format(new Date(), 'yyyy-MM-dd');
+
+      const { data: sessionData } = await supabase.auth.getUser();
+      const reviewerId = sessionData.user?.id;
+
+      if (!reviewerId) {
+        toast.error('No se pudo identificar al gestor que revisa.');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('attendance_absence_reviews')
+        .upsert(
+          {
+            user_id: targetUserId,
+            date: todayDate,
+            is_justified: isJustified,
+            reviewed_by: reviewerId,
+            reviewed_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,date' }
+        );
+
+      if (error) throw error;
+
+      setAttendance((prev) =>
+        prev.map((row) =>
+          row.userId === targetUserId
+            ? {
+                ...row,
+                absenceReview: {
+                  is_justified: isJustified,
+                  notes: null,
+                },
+              }
+            : row
+        )
+      );
+
+      toast.success(`Ausencia marcada como ${isJustified ? 'justificada' : 'no justificada'}.`);
+    } catch {
+      toast.error('No se pudo actualizar la justificación de ausencia.');
+    } finally {
+      setReviewingUserId(null);
+    }
   };
 
   const filteredAttendance = attendance.filter(
@@ -302,9 +434,11 @@ export default function Department() {
                   <TableRow>
                     <TableHead>Empleado</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Tardanza</TableHead>
                     <TableHead>Entrada</TableHead>
                     <TableHead>Salida</TableHead>
                     <TableHead>Ubicación</TableHead>
+                    <TableHead>Ausencia</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -314,11 +448,19 @@ export default function Department() {
                         <div>
                           <p className="font-medium">{row.employeeName}</p>
                           <p className="text-xs text-muted-foreground">{row.email}</p>
+                          <p className="text-xs text-muted-foreground">Tel: {row.phone || 'No registrado'} · Rol: {row.role}</p>
                         </div>
                       </TableCell>
                       <TableCell>
                         {row.todayStatus ? (
                           <StatusBadge status={row.todayStatus} />
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {row.lateMinutes > 0 ? (
+                          <span className="text-amber-600 font-medium">{row.lateMinutes} min</span>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
@@ -341,6 +483,30 @@ export default function Department() {
                             {row.insideGeofence ? '✓ Dentro' : '✗ Fuera'}
                             {row.distance && ` (${row.distance}m)`}
                           </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {row.todayStatus === 'AUSENTE' ? (
+                          <div className="flex flex-wrap gap-1">
+                            <Button
+                              size="sm"
+                              variant={row.absenceReview?.is_justified ? 'default' : 'outline'}
+                              disabled={reviewingUserId === row.userId}
+                              onClick={() => handleSetAbsenceReview(row.userId, true)}
+                            >
+                              Justificada
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={row.absenceReview && !row.absenceReview.is_justified ? 'destructive' : 'outline'}
+                              disabled={reviewingUserId === row.userId}
+                              onClick={() => handleSetAbsenceReview(row.userId, false)}
+                            >
+                              No justificada
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
                     </TableRow>
