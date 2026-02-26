@@ -43,6 +43,14 @@ USING (
   )
 );
 
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER attendance_absence_reviews_set_updated_at
 BEFORE UPDATE ON public.attendance_absence_reviews
 FOR EACH ROW
