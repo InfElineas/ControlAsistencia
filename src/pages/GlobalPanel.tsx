@@ -44,12 +44,15 @@ import { es } from 'date-fns/locale';
 import { exportToXLSX, AttendanceReportRow, formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { useDepartments } from '@/hooks/useDepartments';
+import { calculateLateMinutes } from '@/lib/attendance-metrics';
 
 interface Employee {
   id: string;
   user_id: string;
   full_name: string;
   email: string;
+  phone: string | null;
+  role: string;
   department_id: string;
   department_name: string;
   department_paused: boolean;
@@ -60,20 +63,30 @@ interface ProfileWithDepartment {
   user_id: string;
   full_name: string;
   email: string;
+  phone: string | null;
   department_id: string;
   departments: { name: string; is_paused: boolean } | null;
+}
+
+interface AbsenceReview {
+  is_justified: boolean;
+  notes: string | null;
 }
 
 interface AttendanceSummary {
   userId: string;
   employeeName: string;
   email: string;
+  phone: string | null;
+  role: string;
   department: string;
   todayStatus: 'PRESENTE' | 'TARDE' | 'AUSENTE' | 'DESCANSO' | 'NO_LABORABLE' | null;
   inTime: string | null;
   outTime: string | null;
+  lateMinutes: number;
   insideGeofence: boolean | null;
   distance: number | null;
+  absenceReview: AbsenceReview | null;
 }
 
 interface EmployeeDetails {
@@ -109,6 +122,8 @@ export default function GlobalPanel() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [employeeDetails, setEmployeeDetails] = useState<EmployeeDetails | null>(null);
+  const [deparmentScheduleMap, setDepartmentScheduleMap] = useState<Record<string, { checkin_end_time: string | null; timezone: string | null }>>({});
+  const [reviewingUserId, setReviewingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -136,9 +151,23 @@ export default function GlobalPanel() {
         user_id,
         full_name,
         email,
+        phone,
         department_id,
         departments(name, is_paused)
       `);
+
+    const { data: schedulesData } = await supabase
+      .from('department_schedules')
+      .select('department_id, checkin_end_time, timezone');
+
+    setDepartmentScheduleMap(
+      Object.fromEntries(
+        (schedulesData || []).map((item) => [
+          item.department_id,
+          { checkin_end_time: item.checkin_end_time, timezone: item.timezone },
+        ])
+      )
+    );
 
     if (profilesData) {
       // Filter out department heads and global managers (they are not part of attendance statistics)
@@ -149,7 +178,12 @@ export default function GlobalPanel() {
         .select('user_id, role')
         .in('role', rolesToExclude);
 
+      const { data: allRoles } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
       const excludedUserIds = new Set(excludedRoles?.map((r) => r.user_id) || []);
+      const roleMap = new Map((allRoles || []).map((r) => [r.user_id, r.role]));
 
       const typedProfiles = (profilesData || []) as ProfileWithDepartment[];
 
@@ -160,6 +194,8 @@ export default function GlobalPanel() {
           user_id: p.user_id,
           full_name: p.full_name,
           email: p.email,
+          phone: p.phone,
+          role: roleMap.get(p.user_id) || 'employee',
           department_id: p.department_id,
           department_name: p.departments?.name || 'Sin departamento',
           department_paused: p.departments?.is_paused ?? false,
@@ -172,6 +208,17 @@ export default function GlobalPanel() {
       today.setHours(0, 0, 0, 0);
 
       const summaries: AttendanceSummary[] = [];
+      const todayDate = format(today, 'yyyy-MM-dd');
+
+      const { data: absenceReviews } = await supabase
+        .from('attendance_absence_reviews')
+        .select('user_id, is_justified, notes')
+        .eq('date', todayDate)
+        .in('user_id', filteredEmployees.map((emp) => emp.user_id));
+
+      const reviewMap = new Map(
+        (absenceReviews || []).map((review) => [review.user_id, { is_justified: review.is_justified, notes: review.notes }])
+      );
 
       for (const emp of filteredEmployees) {
         const { data: marks } = await supabase
@@ -184,16 +231,25 @@ export default function GlobalPanel() {
         const inMark = marks?.find((m) => m.mark_type === 'IN');
         const outMark = marks?.filter((m) => m.mark_type === 'OUT').pop();
 
+        const schedule = (schedulesData || []).find((item) => item.department_id === emp.department_id);
+        const lateMinutes = inMark
+          ? calculateLateMinutes(inMark.timestamp, schedule?.checkin_end_time ?? null, schedule?.timezone ?? null)
+          : 0;
+
         summaries.push({
           userId: emp.user_id,
           employeeName: emp.full_name,
           email: emp.email,
+          phone: emp.phone,
+          role: emp.role,
           department: emp.department_name,
-          todayStatus: emp.department_paused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : null,
+          todayStatus: emp.department_paused ? 'NO_LABORABLE' : inMark ? (lateMinutes > 0 ? 'TARDE' : 'PRESENTE') : 'AUSENTE',
           inTime: inMark?.timestamp || null,
           outTime: outMark?.timestamp || null,
+          lateMinutes,
           insideGeofence: inMark?.inside_geofence ?? null,
           distance: inMark?.distance_to_center ?? null,
+          absenceReview: reviewMap.get(emp.user_id) ?? null,
         });
       }
 
@@ -241,10 +297,26 @@ export default function GlobalPanel() {
             employee_name: emp.full_name,
             employee_email: emp.email,
             department: emp.department_name,
-            status: emp.department_paused ? 'NO_LABORABLE' : inMark ? 'PRESENTE' : 'AUSENTE',
+            status: emp.department_paused
+              ? 'NO_LABORABLE'
+              : inMark
+                ? (calculateLateMinutes(
+                    inMark.timestamp,
+                    deparmentScheduleMap[emp.department_id]?.checkin_end_time ?? null,
+                    deparmentScheduleMap[emp.department_id]?.timezone ?? null
+                  ) > 0
+                    ? 'TARDE'
+                    : 'PRESENTE')
+                : 'AUSENTE',
             in_time: inMark ? formatTime(inMark.timestamp) : null,
             out_time: outMark ? formatTime(outMark.timestamp) : null,
-            lateness_minutes: null,
+            lateness_minutes: inMark
+              ? calculateLateMinutes(
+                  inMark.timestamp,
+                  deparmentScheduleMap[emp.department_id]?.checkin_end_time ?? null,
+                  deparmentScheduleMap[emp.department_id]?.timezone ?? null
+                )
+              : null,
             inside_geofence: inMark?.inside_geofence ?? null,
             distance_m: inMark?.distance_to_center ?? null,
           });
@@ -344,8 +416,8 @@ export default function GlobalPanel() {
 
   const metrics = {
     total: employees.length,
-    present: attendance.filter((a) => a.todayStatus === 'PRESENTE').length,
-    absent: attendance.filter((a) => !a.todayStatus).length,
+    present: attendance.filter((a) => a.todayStatus === 'PRESENTE' || a.todayStatus === 'TARDE').length,
+    absent: attendance.filter((a) => a.todayStatus === 'AUSENTE').length,
     compliance: employees.length > 0
       ? Math.round(
           (attendance.filter((a) => a.todayStatus === 'PRESENTE').length /
@@ -362,6 +434,49 @@ export default function GlobalPanel() {
     const matchesDept = selectedDept === 'all' || a.department === selectedDept;
     return matchesSearch && matchesDept;
   });
+
+  const handleSetAbsenceReview = async (targetUserId: string, isJustified: boolean) => {
+    try {
+      setReviewingUserId(targetUserId);
+      const todayDate = format(new Date(), 'yyyy-MM-dd');
+      const { data: sessionData } = await supabase.auth.getUser();
+      const reviewerId = sessionData.user?.id;
+
+      if (!reviewerId) {
+        toast.error('No se pudo identificar al gestor que revisa.');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('attendance_absence_reviews')
+        .upsert(
+          {
+            user_id: targetUserId,
+            date: todayDate,
+            is_justified: isJustified,
+            reviewed_by: reviewerId,
+            reviewed_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,date' }
+        );
+
+      if (error) throw error;
+
+      setAttendance((prev) =>
+        prev.map((row) =>
+          row.userId === targetUserId
+            ? { ...row, absenceReview: { is_justified: isJustified, notes: null } }
+            : row
+        )
+      );
+
+      toast.success(`Ausencia marcada como ${isJustified ? 'justificada' : 'no justificada'}.`);
+    } catch {
+      toast.error('No se pudo actualizar la justificación de ausencia.');
+    } finally {
+      setReviewingUserId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -477,9 +592,11 @@ export default function GlobalPanel() {
                     <TableHead>Empleado</TableHead>
                     <TableHead>Departamento</TableHead>
                     <TableHead>Estado</TableHead>
+                    <TableHead>Tardanza</TableHead>
                     <TableHead>Entrada</TableHead>
                     <TableHead>Salida</TableHead>
                     <TableHead>Ubicación</TableHead>
+                    <TableHead>Ausencia</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -490,12 +607,20 @@ export default function GlobalPanel() {
                         <div>
                           <p className="font-medium">{row.employeeName}</p>
                           <p className="text-xs text-muted-foreground">{row.email}</p>
+                          <p className="text-xs text-muted-foreground">Tel: {row.phone || 'No registrado'} · Rol: {row.role}</p>
                         </div>
                       </TableCell>
                       <TableCell>{row.department}</TableCell>
                       <TableCell>
                         {row.todayStatus ? (
                           <StatusBadge status={row.todayStatus} />
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {row.lateMinutes > 0 ? (
+                          <span className="text-amber-600 font-medium">{row.lateMinutes} min</span>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
@@ -518,6 +643,30 @@ export default function GlobalPanel() {
                             {row.insideGeofence ? '✓ Dentro' : '✗ Fuera'}
                             {row.distance && ` (${row.distance}m)`}
                           </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {row.todayStatus === 'AUSENTE' ? (
+                          <div className="flex flex-wrap gap-1">
+                            <Button
+                              size="sm"
+                              variant={row.absenceReview?.is_justified ? 'default' : 'outline'}
+                              disabled={reviewingUserId === row.userId}
+                              onClick={() => handleSetAbsenceReview(row.userId, true)}
+                            >
+                              Justificada
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={row.absenceReview && !row.absenceReview.is_justified ? 'destructive' : 'outline'}
+                              disabled={reviewingUserId === row.userId}
+                              onClick={() => handleSetAbsenceReview(row.userId, false)}
+                            >
+                              No justificada
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
