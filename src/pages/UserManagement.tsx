@@ -29,11 +29,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useDepartments } from '@/hooks/useDepartments';
-import { Loader2, UserPlus, Shield, Users, Edit, Filter } from 'lucide-react';
+import { Loader2, UserPlus, Shield, Users, Edit, Filter, Trash2 } from 'lucide-react';
 import { z } from 'zod';
 
 interface UserWithRole {
@@ -55,7 +65,7 @@ const createUserSchema = z.object({
 });
 
 export default function UserManagement() {
-  const { role } = useAuth();
+  const { role, user: currentUser } = useAuth();
   const { toast } = useToast();
   const { departments } = useDepartments();
   
@@ -86,6 +96,9 @@ export default function UserManagement() {
   const [newUserRole, setNewUserRole] = useState<AppRole>('employee');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [deletingUser, setDeletingUser] = useState<UserWithRole | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -255,6 +268,46 @@ export default function UserManagement() {
     }
   };
 
+
+  const handleOpenDeleteDialog = (targetUser: UserWithRole) => {
+    setDeletingUser(targetUser);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deletingUser) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { user_id: deletingUser.user_id },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast({
+        title: 'Usuario eliminado',
+        description: `El usuario ${deletingUser.full_name} fue eliminado correctamente.`,
+      });
+
+      setDeleteDialogOpen(false);
+      setDeletingUser(null);
+      fetchUsers();
+    } catch (error: unknown) {
+      toast({
+        title: 'Error',
+        description: mapUserManagementError(error, 'delete'),
+        variant: 'destructive',
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const getRoleBadge = (userRole: AppRole) => {
     const variants: Record<AppRole, { label: string; className: string }> = {
       employee: { label: 'Empleado', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' },
@@ -397,13 +450,26 @@ export default function UserManagement() {
                       <TableCell>{user.department_name}</TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditUser(user)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditUser(user)}
+                            aria-label={`Editar ${user.full_name}`}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenDeleteDialog(user)}
+                            disabled={currentUser?.id === user.user_id}
+                            aria-label={`Eliminar ${user.full_name}`}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -484,6 +550,39 @@ export default function UserManagement() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar usuario?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción eliminará permanentemente a <strong>{deletingUser?.full_name}</strong> del sistema.
+                Esta acción no se puede deshacer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault();
+                  handleDeleteUser();
+                }}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Eliminando...
+                  </>
+                ) : (
+                  'Eliminar usuario'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Create user dialog */}
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
