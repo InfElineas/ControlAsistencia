@@ -161,3 +161,9 @@ supabase db push
 
 # O ejecuta específicamente la migración en tu pipeline de deploy
 ```
+
+### Flujo de aprobación de incidencias (roles)
+
+- **Empleado**: crea y consulta sus incidencias en `/incidents`.
+- **Department Head / Global Manager / Superadmin**: revisan, aprueban o rechazan incidencias en la misma ruta `/incidents` (vista de gestión por rol).
+- La aprobación guarda estado (`approved/rejected`), notas del gestor y datos de revisión (`reviewed_by`, `reviewed_at`).

@@ -123,7 +123,7 @@ const App = () => (
             <Route
               path="/incidents"
               element={
-                <ProtectedRoute excludedRoles={["global_manager", "superadmin"]}>
+                <ProtectedRoute>
                   <Incidents />
                 </ProtectedRoute>
               }

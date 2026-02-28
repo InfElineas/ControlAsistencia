@@ -154,6 +154,8 @@ export type Database = {
           manager_notes: string | null
           reason: string | null
           requested_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           status: string
           updated_at: string
           user_id: string
@@ -165,6 +167,8 @@ export type Database = {
           manager_notes?: string | null
           reason?: string | null
           requested_at: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           status?: string
           updated_at?: string
           user_id: string
@@ -176,6 +180,8 @@ export type Database = {
           manager_notes?: string | null
           reason?: string | null
           requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           status?: string
           updated_at?: string
           user_id?: string

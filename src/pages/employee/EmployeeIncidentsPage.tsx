@@ -21,6 +21,8 @@ interface Incident {
   requested_at: string;
   status: 'pending' | 'approved' | 'rejected';
   reason: string | null;
+  manager_notes: string | null;
+  reviewed_at: string | null;
 }
 
 interface DBErrorShape {
@@ -62,7 +64,7 @@ export function EmployeeIncidentsPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('attendance_incidents')
-        .select('id, incident_type, requested_at, status, reason')
+        .select('id, incident_type, requested_at, status, reason, manager_notes, reviewed_at')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -158,7 +160,9 @@ export function EmployeeIncidentsPage() {
                 <p className="text-xs uppercase text-muted-foreground">{item.status}</p>
               </div>
               <p className="text-muted-foreground">{format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm')}</p>
-              {item.reason && <p className="mt-1">{item.reason}</p>}
+              {item.reason && <p className="mt-1">Motivo: {item.reason}</p>}
+              {item.manager_notes && <p className="mt-1 text-muted-foreground">Respuesta gestor: {item.manager_notes}</p>}
+              {item.reviewed_at && <p className="mt-1 text-xs text-muted-foreground">Revisada: {format(new Date(item.reviewed_at), 'dd/MM/yyyy HH:mm')}</p>}
             </div>
           ))}
         </CardContent>

@@ -34,7 +34,7 @@ const navItems: NavItem[] = [
   { href: '/', label: 'Inicio', icon: LayoutDashboard },
   { href: '/attendance', label: 'Marcar', icon: Clock, excludeRoles: ['global_manager', 'superadmin'] },
   { href: '/history', label: 'Mi Historial', icon: History, excludeRoles: ['global_manager', 'superadmin'] },
-  { href: '/incidents', label: 'Incidencias', icon: TriangleAlert, excludeRoles: ['global_manager', 'superadmin'] },
+  { href: '/incidents', label: 'Incidencias', icon: TriangleAlert },
   { href: '/profile', label: 'Mi perfil', icon: User },
   { href: '/rest-schedule', label: 'Descansos', icon: Calendar },
   { href: '/vacations', label: 'Vacaciones', icon: PlaneTakeoff, excludeRoles: ['global_manager', 'superadmin'] },
