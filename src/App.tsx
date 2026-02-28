@@ -17,6 +17,7 @@ import UserManagement from "./pages/UserManagement";
 import DepartmentsManagement from "./pages/DepartmentsManagement";
 import Vacations from "./pages/Vacations";
 import Profile from "./pages/Profile";
+import SuperAdmin from "./pages/SuperAdmin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,7 +42,7 @@ const App = () => (
             <Route
               path="/attendance"
               element={
-                <ProtectedRoute excludedRoles={['global_manager']}>
+                <ProtectedRoute excludedRoles={["global_manager", "superadmin"]}>
                   <Attendance />
                 </ProtectedRoute>
               }
@@ -49,7 +50,7 @@ const App = () => (
             <Route
               path="/history"
               element={
-                <ProtectedRoute excludedRoles={['global_manager']}>
+                <ProtectedRoute excludedRoles={["global_manager", "superadmin"]}>
                   <History />
                 </ProtectedRoute>
               }
@@ -65,7 +66,7 @@ const App = () => (
             <Route
               path="/department"
               element={
-                <ProtectedRoute allowedRoles={['department_head']}>
+                <ProtectedRoute allowedRoles={["department_head"]}>
                   <Department />
                 </ProtectedRoute>
               }
@@ -73,7 +74,7 @@ const App = () => (
             <Route
               path="/global"
               element={
-                <ProtectedRoute allowedRoles={['global_manager']}>
+                <ProtectedRoute allowedRoles={["global_manager", "superadmin"]}>
                   <GlobalPanel />
                 </ProtectedRoute>
               }
@@ -81,7 +82,7 @@ const App = () => (
             <Route
               path="/configuration"
               element={
-                <ProtectedRoute allowedRoles={['global_manager']}>
+                <ProtectedRoute allowedRoles={["global_manager", "superadmin"]}>
                   <Configuration />
                 </ProtectedRoute>
               }
@@ -89,7 +90,7 @@ const App = () => (
             <Route
               path="/vacations"
               element={
-                <ProtectedRoute excludedRoles={['global_manager']}>
+                <ProtectedRoute excludedRoles={["global_manager", "superadmin"]}>
                   <Vacations />
                 </ProtectedRoute>
               }
@@ -97,7 +98,7 @@ const App = () => (
             <Route
               path="/users"
               element={
-                <ProtectedRoute allowedRoles={['global_manager']}>
+                <ProtectedRoute allowedRoles={["global_manager", "superadmin"]}>
                   <UserManagement />
                 </ProtectedRoute>
               }
@@ -105,8 +106,16 @@ const App = () => (
             <Route
               path="/departments-admin"
               element={
-                <ProtectedRoute allowedRoles={['global_manager']}>
+                <ProtectedRoute allowedRoles={["global_manager", "superadmin"]}>
                   <DepartmentsManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/superadmin"
+              element={
+                <ProtectedRoute allowedRoles={["superadmin"]}>
+                  <SuperAdmin />
                 </ProtectedRoute>
               }
             />
