@@ -9,8 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { AlertTriangle, Database, KeyRound, Play, RefreshCcw, ShieldCheck, Trash2, Users, Wrench } from 'lucide-react';
+import { AlertTriangle, Database, FileSpreadsheet, KeyRound, Play, RefreshCcw, ShieldCheck, Trash2, Users, Wrench } from 'lucide-react';
 import { getHighestRole } from '@/lib/roles';
+import * as XLSX from 'xlsx';
 
 type AuditLog = {
   id: string;
@@ -70,6 +71,9 @@ export default function SuperAdmin() {
   const [sqlQuery, setSqlQuery] = useState(INITIAL_SQL);
   const [runningSql, setRunningSql] = useState(false);
   const [sqlResult, setSqlResult] = useState<SqlConsoleResult | null>(null);
+  const [importFileName, setImportFileName] = useState('');
+  const [importingHistory, setImportingHistory] = useState(false);
+  const [importSummary, setImportSummary] = useState<{ imported_marks: number; missing_emails: string[] } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -154,6 +158,98 @@ export default function SuperAdmin() {
     if (!sqlResult || !sqlResult.rows.length) return [];
     return Object.keys(sqlResult.rows[0]);
   }, [sqlResult]);
+
+  const normalizeHeader = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, '_');
+
+  const parseExcelDate = (value: unknown): string | null => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return trimmed;
+      }
+      const parsed = new Date(trimmed);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().slice(0, 10);
+      }
+      return null;
+    }
+
+    if (typeof value === 'number') {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (!parsed) return null;
+      const year = parsed.y.toString().padStart(4, '0');
+      const month = parsed.m.toString().padStart(2, '0');
+      const day = parsed.d.toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    return null;
+  };
+
+  const importAttendanceHistory = async (file: File) => {
+    try {
+      setImportingHistory(true);
+      setImportSummary(null);
+
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' });
+
+      const preparedRows = rawRows.flatMap((row) => {
+        const normalized = Object.entries(row).reduce<Record<string, unknown>>((acc, [key, val]) => {
+          acc[normalizeHeader(key)] = val;
+          return acc;
+        }, {});
+
+        const emailValue = String(normalized.email ?? normalized.correo ?? '').trim().toLowerCase();
+        const dateValue = parseExcelDate(normalized.fecha ?? normalized.date ?? normalized.fecha_trabajo ?? normalized.work_date ?? null);
+
+        if (!emailValue || !dateValue) return [];
+
+        return [{ email: emailValue, date: dateValue }];
+      });
+
+      if (preparedRows.length === 0) {
+        throw new Error('No se encontraron filas válidas (requiere columnas email/correo y fecha/date)');
+      }
+
+      const { data, error } = await supabase.functions.invoke('import-attendance-history', {
+        body: {
+          source_file_name: file.name,
+          rows: preparedRows,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setImportSummary({
+        imported_marks: Number(data?.imported_marks ?? 0),
+        missing_emails: (data?.missing_emails ?? []) as string[],
+      });
+
+      toast({
+        title: 'Histórico importado',
+        description: `Marcajes importados: ${data?.imported_marks ?? 0}`,
+      });
+
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: 'Error al importar',
+        description: 'No se pudo importar el archivo Excel histórico.',
+        variant: 'destructive',
+      });
+    } finally {
+      setImportingHistory(false);
+    }
+  };
 
   const runSqlQuery = async () => {
     try {
@@ -383,6 +479,42 @@ export default function SuperAdmin() {
                 ))}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2"><FileSpreadsheet className="h-4 w-4" /> Importar histórico desde Excel</CardTitle>
+            <CardDescription>
+              Sube un Excel con columnas <strong>email/correo</strong> y <strong>fecha/date</strong> para cargar trabajo histórico y ajustar estadísticas/vacaciones.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="max-w-md"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  setImportFileName(file.name);
+                  await importAttendanceHistory(file);
+                  event.currentTarget.value = '';
+                }}
+              />
+            </div>
+            {importingHistory && <p className="text-xs text-muted-foreground">Importando histórico...</p>}
+            {importFileName && <p className="text-xs text-muted-foreground">Último archivo: {importFileName}</p>}
+            {importSummary && (
+              <div className="text-xs rounded-md border p-2 space-y-1">
+                <p>Marcajes importados: <strong>{importSummary.imported_marks}</strong></p>
+                <p>Correos no encontrados: <strong>{importSummary.missing_emails.length}</strong></p>
+                {importSummary.missing_emails.length > 0 && (
+                  <p className="text-muted-foreground break-all">{importSummary.missing_emails.slice(0, 12).join(', ')}</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
