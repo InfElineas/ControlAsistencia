@@ -81,7 +81,7 @@ const createUserSchema = z.object({
   password: z.string().min(6, 'Mínimo 6 caracteres'),
   full_name: z.string().min(2, 'Nombre requerido'),
   department_id: z.string().min(1, 'Selecciona un departamento'),
-  role: z.enum(['employee', 'department_head', 'global_manager']),
+  role: z.enum(['employee', 'department_head', 'global_manager', 'superadmin']),
 });
 
 export default function UserManagement() {
@@ -334,6 +334,7 @@ export default function UserManagement() {
       employee: { label: 'Empleado', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' },
       department_head: { label: 'Jefe Depto.', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300' },
       global_manager: { label: 'Gestor Global', className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300' },
+      superadmin: { label: 'Superadmin', className: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-300' },
     };
     return (
       <Badge className={variants[userRole].className}>
@@ -342,7 +343,7 @@ export default function UserManagement() {
     );
   };
 
-  if (role !== 'global_manager') {
+  if (role !== 'global_manager' && role !== 'superadmin') {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-64">
@@ -397,7 +398,7 @@ export default function UserManagement() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {users.filter(u => u.role === 'global_manager').length}
+                {users.filter(u => u.role === 'global_manager' || u.role === 'superadmin').length}
               </div>
             </CardContent>
           </Card>
@@ -438,6 +439,7 @@ export default function UserManagement() {
                     <SelectItem value="employee">Empleado</SelectItem>
                     <SelectItem value="department_head">Jefe de Depto.</SelectItem>
                     <SelectItem value="global_manager">Gestor Global</SelectItem>
+                    {role === 'superadmin' && <SelectItem value="superadmin">Superadmin</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
@@ -548,6 +550,7 @@ export default function UserManagement() {
                       <SelectItem value="employee">Empleado</SelectItem>
                       <SelectItem value="department_head">Jefe de Departamento</SelectItem>
                       <SelectItem value="global_manager">Gestor Global</SelectItem>
+                    {role === 'superadmin' && <SelectItem value="superadmin">Superadmin</SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
@@ -674,6 +677,7 @@ export default function UserManagement() {
                     <SelectItem value="employee">Empleado</SelectItem>
                     <SelectItem value="department_head">Jefe de Departamento</SelectItem>
                     <SelectItem value="global_manager">Gestor Global</SelectItem>
+                    {role === 'superadmin' && <SelectItem value="superadmin">Superadmin</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
