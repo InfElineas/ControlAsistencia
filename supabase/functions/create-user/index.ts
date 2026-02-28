@@ -60,6 +60,8 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("Only global managers or superadmins can create users");
     }
 
+    const sourceIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+
     // Parse request body
     const { email, password, full_name, department_id, role }: CreateUserRequest = await req.json();
 
@@ -113,6 +115,9 @@ serve(async (req: Request): Promise<Response> => {
     await adminClient.from('audit_log').insert({
       user_id: currentUser.id,
       action: 'user_created',
+      description: `Usuario creado: ${email}`,
+      source_ip: sourceIp,
+      metadata: { actor_role: currentRoles.includes('superadmin') ? 'superadmin' : 'global_manager' },
       table_name: 'auth.users',
       record_id: newUser.user?.id,
       new_data: { email, full_name, department_id, role },

@@ -149,30 +149,39 @@ export type Database = {
         Row: {
           action: string
           created_at: string
+          description: string | null
           id: string
+          metadata: Json
           new_data: Json | null
           old_data: Json | null
           record_id: string | null
+          source_ip: string | null
           table_name: string | null
           user_id: string | null
         }
         Insert: {
           action: string
           created_at?: string
+          description?: string | null
           id?: string
+          metadata?: Json
           new_data?: Json | null
           old_data?: Json | null
           record_id?: string | null
+          source_ip?: string | null
           table_name?: string | null
           user_id?: string | null
         }
         Update: {
           action?: string
           created_at?: string
+          description?: string | null
           id?: string
+          metadata?: Json
           new_data?: Json | null
           old_data?: Json | null
           record_id?: string | null
+          source_ip?: string | null
           table_name?: string | null
           user_id?: string | null
         }

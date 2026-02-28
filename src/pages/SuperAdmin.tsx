@@ -5,22 +5,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import {
-  AlertTriangle,
-  Database,
-  FileWarning,
-  KeyRound,
-  Play,
-  RefreshCcw,
-  ShieldCheck,
-  Trash2,
-  Users,
-} from 'lucide-react';
+import { AlertTriangle, Database, KeyRound, Play, RefreshCcw, ShieldCheck, Trash2, Users, Wrench } from 'lucide-react';
 import { getHighestRole } from '@/lib/roles';
 
 type AuditLog = {
@@ -28,12 +17,11 @@ type AuditLog = {
   action: string;
   table_name: string | null;
   created_at: string;
-};
-
-type AppConfig = {
-  id: string;
-  key: string;
-  value: unknown;
+  user_id: string | null;
+  record_id: string | null;
+  description: string | null;
+  source_ip: string | null;
+  metadata: Record<string, unknown>;
 };
 
 type ManagedUser = {
@@ -44,10 +32,11 @@ type ManagedUser = {
 };
 
 type Stats = {
+  totalLogs: number;
+  totalErrors: number;
   totalUsers: number;
-  totalDepartments: number;
-  totalAttendanceMarks: number;
-  totalVacationRequests: number;
+  totalGlobalManagerChanges: number;
+  uniqueIps: number;
 };
 
 type SqlConsoleResult = {
@@ -56,30 +45,26 @@ type SqlConsoleResult = {
   rows: Record<string, unknown>[];
 };
 
-const INITIAL_SQL = `select
-  action,
-  table_name,
-  created_at
+const INITIAL_SQL = `select created_at, user_id, action, description, source_ip
 from public.audit_log
 order by created_at desc
-limit 20;`;
+limit 25;`;
 
 const EMPTY_STATS: Stats = {
+  totalLogs: 0,
+  totalErrors: 0,
   totalUsers: 0,
-  totalDepartments: 0,
-  totalAttendanceMarks: 0,
-  totalVacationRequests: 0,
+  totalGlobalManagerChanges: 0,
+  uniqueIps: 0,
 };
 
 export default function SuperAdmin() {
   const { role, user } = useAuth();
   const { toast } = useToast();
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [configs, setConfigs] = useState<AppConfig[]>([]);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
-  const [draftValues, setDraftValues] = useState<Record<string, string>>({});
   const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
   const [accountActionUserId, setAccountActionUserId] = useState<string | null>(null);
   const [sqlQuery, setSqlQuery] = useState(INITIAL_SQL);
@@ -90,31 +75,24 @@ export default function SuperAdmin() {
     try {
       setLoading(true);
       const [
-        { data: logData, error: logError },
-        { data: configData, error: configError },
+        { data: logData, error: logError, count: totalLogs },
         { data: profileData, error: profileError, count: totalUsers },
         { data: roleData, error: rolesError },
-        { count: totalDepartments, error: departmentsError },
-        { count: totalAttendanceMarks, error: attendanceError },
-        { count: totalVacationRequests, error: vacationsError },
       ] = await Promise.all([
-        supabase.from('audit_log').select('id, action, table_name, created_at').order('created_at', { ascending: false }).limit(80),
-        supabase.from('app_config').select('id, key, value').order('key', { ascending: true }),
+        supabase
+          .from('audit_log')
+          .select('id, action, table_name, created_at, user_id, record_id, description, source_ip, metadata', { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .limit(200),
         supabase.from('profiles').select('user_id, full_name, email', { count: 'exact' }).order('full_name', { ascending: true }),
         supabase.from('user_roles').select('user_id, role'),
-        supabase.from('departments').select('id', { count: 'exact', head: true }),
-        supabase.from('attendance_marks').select('id', { count: 'exact', head: true }),
-        supabase.from('vacation_requests').select('id', { count: 'exact', head: true }),
       ]);
 
       if (logError) throw logError;
-      if (configError) throw configError;
       if (profileError) throw profileError;
       if (rolesError) throw rolesError;
-      if (departmentsError) throw departmentsError;
-      if (attendanceError) throw attendanceError;
-      if (vacationsError) throw vacationsError;
 
+      const castedLogs = (logData ?? []) as AuditLog[];
       const rolesByUser = (roleData ?? []).reduce<Record<string, string[]>>((acc, item) => {
         if (!acc[item.user_id]) acc[item.user_id] = [];
         acc[item.user_id].push(item.role);
@@ -128,27 +106,32 @@ export default function SuperAdmin() {
         role: getHighestRole(rolesByUser[profile.user_id] ?? []),
       }));
 
-      const cfg = (configData ?? []) as AppConfig[];
-      setLogs((logData ?? []) as AuditLog[]);
-      setConfigs(cfg);
+      const errorCount = castedLogs.filter((item) => {
+        const action = item.action.toLowerCase();
+        return action.includes('error') || action.includes('failed');
+      }).length;
+
+      const globalManagerChanges = castedLogs.filter((item) => {
+        const actorRole = String(item.metadata?.actor_role ?? '').toLowerCase();
+        return actorRole === 'global_manager';
+      }).length;
+
+      const uniqueIps = new Set(castedLogs.map((item) => item.source_ip).filter(Boolean)).size;
+
+      setLogs(castedLogs);
       setUsers(usersData);
       setStats({
-        totalUsers: totalUsers ?? 0,
-        totalDepartments: totalDepartments ?? 0,
-        totalAttendanceMarks: totalAttendanceMarks ?? 0,
-        totalVacationRequests: totalVacationRequests ?? 0,
+        totalLogs: totalLogs ?? castedLogs.length,
+        totalErrors: errorCount,
+        totalUsers: totalUsers ?? usersData.length,
+        totalGlobalManagerChanges: globalManagerChanges,
+        uniqueIps,
       });
-      setDraftValues(
-        cfg.reduce<Record<string, string>>((acc, item) => {
-          acc[item.key] = typeof item.value === 'string' ? item.value : JSON.stringify(item.value);
-          return acc;
-        }, {})
-      );
     } catch (error) {
       console.error(error);
       toast({
         title: 'Error',
-        description: 'No fue posible cargar la consola de superadmin.',
+        description: 'No fue posible cargar el panel técnico de superadmin.',
         variant: 'destructive',
       });
     } finally {
@@ -160,8 +143,10 @@ export default function SuperAdmin() {
     loadData();
   }, [loadData]);
 
-  const errorLogs = useMemo(
-    () => logs.filter((item) => item.action.toLowerCase().includes('error') || item.action.toLowerCase().includes('failed')),
+  const errorLogs = useMemo(() => logs.filter((item) => item.action.toLowerCase().includes('error') || item.action.toLowerCase().includes('failed')), [logs]);
+
+  const globalManagerLogs = useMemo(
+    () => logs.filter((item) => String(item.metadata?.actor_role ?? '').toLowerCase() === 'global_manager'),
     [logs]
   );
 
@@ -169,31 +154,6 @@ export default function SuperAdmin() {
     if (!sqlResult || !sqlResult.rows.length) return [];
     return Object.keys(sqlResult.rows[0]);
   }, [sqlResult]);
-
-  const saveConfig = async (key: string) => {
-    try {
-      const value = draftValues[key] ?? '';
-      let parsedValue: unknown = value;
-
-      try {
-        parsedValue = JSON.parse(value);
-      } catch {
-        parsedValue = value;
-      }
-
-      const { error } = await supabase
-        .from('app_config')
-        .update({ value: parsedValue })
-        .eq('key', key);
-
-      if (error) throw error;
-      toast({ title: 'Configuración guardada', description: `Clave actualizada: ${key}` });
-      await loadData();
-    } catch (error) {
-      console.error(error);
-      toast({ title: 'Error', description: `No se pudo guardar ${key}.`, variant: 'destructive' });
-    }
-  };
 
   const runSqlQuery = async () => {
     try {
@@ -203,13 +163,10 @@ export default function SuperAdmin() {
       });
 
       if (error) throw error;
+
       const result = data as SqlConsoleResult;
       setSqlResult(result);
-
-      toast({
-        title: 'Consulta ejecutada',
-        description: `Filas afectadas/devueltas: ${result.row_count}`,
-      });
+      toast({ title: 'Consulta ejecutada', description: `Filas: ${result.row_count}` });
     } catch (error) {
       console.error(error);
       toast({
@@ -226,11 +183,7 @@ export default function SuperAdmin() {
     const newPassword = (passwordDrafts[targetUserId] ?? '').trim();
 
     if (newPassword.length < 8) {
-      toast({
-        title: 'Contraseña inválida',
-        description: 'La nueva contraseña debe tener al menos 8 caracteres.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Contraseña inválida', description: 'Debe tener al menos 8 caracteres.', variant: 'destructive' });
       return;
     }
 
@@ -247,10 +200,11 @@ export default function SuperAdmin() {
       if (data?.error) throw new Error(data.error);
 
       setPasswordDrafts((prev) => ({ ...prev, [targetUserId]: '' }));
-      toast({ title: 'Contraseña actualizada', description: 'Se restableció la contraseña del usuario.' });
+      toast({ title: 'Contraseña actualizada', description: 'Reset realizado correctamente.' });
+      await loadData();
     } catch (error) {
       console.error(error);
-      toast({ title: 'Error', description: 'No se pudo restablecer la contraseña.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'No se pudo resetear la contraseña.', variant: 'destructive' });
     } finally {
       setAccountActionUserId(null);
     }
@@ -258,11 +212,7 @@ export default function SuperAdmin() {
 
   const deleteUser = async (targetUserId: string) => {
     if (targetUserId === user?.id) {
-      toast({
-        title: 'Operación bloqueada',
-        description: 'No puedes eliminar tu propio usuario desde esta consola.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Operación bloqueada', description: 'No puedes eliminar tu propio usuario.', variant: 'destructive' });
       return;
     }
 
@@ -301,85 +251,47 @@ export default function SuperAdmin() {
     <AppLayout>
       <div className="max-w-[1500px] mx-auto space-y-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Consola Superadmin</h1>
-          <p className="text-sm text-muted-foreground">Control total del sistema: estadísticas, SQL, cuentas y auditoría.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Panel administrativo técnico</h1>
+          <p className="text-sm text-muted-foreground">Visión global del sistema, seguridad y operación técnica.</p>
         </div>
 
         <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Eventos auditados</p>
-              <p className="text-xl font-semibold">{logs.length}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Errores recientes</p>
-              <p className="text-xl font-semibold">{errorLogs.length}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Usuarios</p>
-              <p className="text-xl font-semibold">{stats.totalUsers}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Departamentos</p>
-              <p className="text-xl font-semibold">{stats.totalDepartments}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Marcajes / Vacaciones</p>
-              <p className="text-xl font-semibold">{stats.totalAttendanceMarks} / {stats.totalVacationRequests}</p>
-            </CardContent>
-          </Card>
+          <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Logs totales</p><p className="text-xl font-semibold">{stats.totalLogs}</p></CardContent></Card>
+          <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Errores detectados</p><p className="text-xl font-semibold">{stats.totalErrors}</p></CardContent></Card>
+          <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Usuarios</p><p className="text-xl font-semibold">{stats.totalUsers}</p></CardContent></Card>
+          <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">IPs únicas</p><p className="text-xl font-semibold">{stats.uniqueIps}</p></CardContent></Card>
+          <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Cambios por gestores</p><p className="text-xl font-semibold">{stats.totalGlobalManagerChanges}</p></CardContent></Card>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Database className="h-4 w-4" /> SQL Console
-              </CardTitle>
-              <CardDescription>Ejecuta consultas SQL como superadmin (similar al SQL Editor).</CardDescription>
+              <CardTitle className="text-base flex items-center gap-2"><Database className="h-4 w-4" /> SQL Console del sistema</CardTitle>
+              <CardDescription>Consulta recursos técnicos y ejecuta comandos como en SQL Editor.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Textarea
-                value={sqlQuery}
-                onChange={(event) => setSqlQuery(event.target.value)}
-                className="min-h-[180px] font-mono text-xs"
-              />
+              <Textarea value={sqlQuery} onChange={(event) => setSqlQuery(event.target.value)} className="min-h-[180px] font-mono text-xs" />
               <div className="flex justify-end">
-                <Button onClick={runSqlQuery} disabled={runningSql}>
-                  <Play className="h-4 w-4 mr-2" />
-                  {runningSql ? 'Ejecutando...' : 'Ejecutar SQL'}
-                </Button>
+                <Button onClick={runSqlQuery} disabled={runningSql}><Play className="h-4 w-4 mr-2" />{runningSql ? 'Ejecutando...' : 'Ejecutar SQL'}</Button>
               </div>
 
               {sqlResult && (
                 <div className="space-y-2">
                   <Badge variant="outline">{sqlResult.type} · {sqlResult.row_count} filas</Badge>
-                  <div className="max-h-[260px] overflow-auto border rounded-md">
+                  <div className="max-h-[280px] overflow-auto border rounded-md">
                     {sqlResult.rows.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            {sqlColumns.map((column) => (
-                              <TableHead key={column}>{column}</TableHead>
-                            ))}
+                            {sqlColumns.map((column) => (<TableHead key={column}>{column}</TableHead>))}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {sqlResult.rows.slice(0, 100).map((row, index) => (
+                          {sqlResult.rows.slice(0, 120).map((row, index) => (
                             <TableRow key={index}>
                               {sqlColumns.map((column) => (
                                 <TableCell key={`${index}-${column}`} className="text-xs align-top whitespace-pre-wrap">
-                                  {typeof row[column] === 'object'
-                                    ? JSON.stringify(row[column])
-                                    : String(row[column] ?? '')}
+                                  {typeof row[column] === 'object' ? JSON.stringify(row[column]) : String(row[column] ?? '')}
                                 </TableCell>
                               ))}
                             </TableRow>
@@ -399,25 +311,21 @@ export default function SuperAdmin() {
             <Card>
               <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">Logs recientes</CardTitle>
-                  <CardDescription>Eventos de auditoría.</CardDescription>
+                  <CardTitle className="text-base">Errores del sistema</CardTitle>
+                  <CardDescription>Todos los eventos de error/fail detectados.</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={loadData}>
-                  <RefreshCcw className="h-4 w-4 mr-1" /> Recargar
-                </Button>
+                <Button variant="outline" size="sm" onClick={loadData}><RefreshCcw className="h-4 w-4 mr-1" />Recargar</Button>
               </CardHeader>
-              <CardContent className="space-y-2 max-h-[280px] overflow-auto">
+              <CardContent className="space-y-2 max-h-[260px] overflow-auto">
                 {loading ? (
                   <p className="text-xs text-muted-foreground">Cargando...</p>
-                ) : logs.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Sin datos de auditoría.</p>
+                ) : errorLogs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Sin errores recientes.</p>
                 ) : (
-                  logs.map((item) => (
-                    <div key={item.id} className="border rounded-md p-2">
-                      <p className="text-sm font-medium">{item.action}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.table_name || 'N/A'} · {new Date(item.created_at).toLocaleString()}
-                      </p>
+                  errorLogs.map((item) => (
+                    <div key={item.id} className="border rounded-md p-2 bg-amber-50/40 dark:bg-amber-950/20">
+                      <p className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-500" />{item.action}</p>
+                      <p className="text-xs text-muted-foreground">{item.description || 'Sin descripción'} · IP: {item.source_ip || 'N/A'}</p>
                     </div>
                   ))
                 )}
@@ -426,19 +334,17 @@ export default function SuperAdmin() {
 
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Errores detectados</CardTitle>
-                <CardDescription>Acciones que contienen error/fail.</CardDescription>
+                <CardTitle className="text-base flex items-center gap-2"><Wrench className="h-4 w-4" /> Cambios por gestores globales</CardTitle>
+                <CardDescription>Acciones técnicas hechas por global_manager.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 max-h-[200px] overflow-auto">
-                {errorLogs.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Sin errores recientes.</p>
+              <CardContent className="space-y-2 max-h-[220px] overflow-auto">
+                {globalManagerLogs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Sin cambios registrados por gestores globales.</p>
                 ) : (
-                  errorLogs.map((item) => (
-                    <div key={item.id} className="border rounded-md p-2 bg-amber-50/40 dark:bg-amber-950/20">
-                      <p className="text-sm font-medium flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-500" />
-                        {item.action}
-                      </p>
+                  globalManagerLogs.map((item) => (
+                    <div key={item.id} className="border rounded-md p-2">
+                      <p className="text-sm font-medium">{item.action}</p>
+                      <p className="text-xs text-muted-foreground">User: {item.user_id || 'N/A'} · {item.description || 'Sin descripción'}</p>
                     </div>
                   ))
                 )}
@@ -449,10 +355,41 @@ export default function SuperAdmin() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4" /> Gestión total de cuentas
-            </CardTitle>
-            <CardDescription>Reset de contraseña y eliminación de usuarios desde la plataforma.</CardDescription>
+            <CardTitle className="text-base flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Log global del sistema</CardTitle>
+            <CardDescription>Todos los logs técnicos con usuario, descripción, IP y cambios.</CardDescription>
+          </CardHeader>
+          <CardContent className="max-h-[380px] overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Acción</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>IP</TableHead>
+                  <TableHead>Recurso</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {logs.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="text-xs">{new Date(item.created_at).toLocaleString()}</TableCell>
+                    <TableCell className="text-xs">{item.user_id || 'N/A'}</TableCell>
+                    <TableCell className="text-xs">{item.action}</TableCell>
+                    <TableCell className="text-xs max-w-[280px] whitespace-pre-wrap">{item.description || 'Sin descripción'}</TableCell>
+                    <TableCell className="text-xs">{item.source_ip || 'N/A'}</TableCell>
+                    <TableCell className="text-xs">{item.table_name || 'N/A'} · {item.record_id || '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Gestión total de cuentas</CardTitle>
+            <CardDescription>Reset de contraseña y eliminación de usuarios desde el panel técnico.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 max-h-[350px] overflow-auto">
             {users.map((managedUser) => (
@@ -469,12 +406,7 @@ export default function SuperAdmin() {
                   <Input
                     type="password"
                     value={passwordDrafts[managedUser.user_id] ?? ''}
-                    onChange={(event) =>
-                      setPasswordDrafts((prev) => ({
-                        ...prev,
-                        [managedUser.user_id]: event.target.value,
-                      }))
-                    }
+                    onChange={(event) => setPasswordDrafts((prev) => ({ ...prev, [managedUser.user_id]: event.target.value }))}
                     placeholder="Nueva contraseña (mínimo 8 caracteres)"
                     className="h-8"
                   />
@@ -497,32 +429,6 @@ export default function SuperAdmin() {
                 </div>
               </div>
             ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileWarning className="h-4 w-4" /> Ajustes rápidos
-            </CardTitle>
-            <CardDescription>Configuraciones compactas (si quieres más detalle, usa Configuración).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-              {configs.map((config) => (
-                <div key={config.id} className="border rounded-md p-2 space-y-1">
-                  <Label className="text-xs font-semibold leading-tight block">{config.key}</Label>
-                  <Input
-                    className="h-8 text-xs"
-                    value={draftValues[config.key] ?? ''}
-                    onChange={(event) => setDraftValues((prev) => ({ ...prev, [config.key]: event.target.value }))}
-                  />
-                  <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={() => saveConfig(config.key)}>
-                    Guardar
-                  </Button>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
       </div>

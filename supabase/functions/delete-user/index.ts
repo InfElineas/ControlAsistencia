@@ -51,6 +51,8 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("Only superadmins can delete users");
     }
 
+    const sourceIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+
     const { user_id }: DeleteUserRequest = await req.json();
 
     if (!user_id) {
@@ -101,6 +103,9 @@ serve(async (req: Request): Promise<Response> => {
     await adminClient.from("audit_log").insert({
       user_id: currentUser.id,
       action: "user_deleted",
+      description: `Usuario eliminado: ${targetProfile?.email || user_id}`,
+      source_ip: sourceIp,
+      metadata: { actor_role: "superadmin" },
       table_name: "auth.users",
       record_id: user_id,
       old_data: {

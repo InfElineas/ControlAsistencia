@@ -214,8 +214,10 @@ export default function UserManagement() {
       if (insertError) throw insertError;
 
       await supabase.from('audit_log').insert({
-        user_id: editingUser.user_id,
+        user_id: currentUser?.id ?? null,
         action: 'role_changed',
+        description: `Rol actualizado para ${editingUser.email}`,
+        metadata: { actor_role: role ?? 'unknown' },
         table_name: 'user_roles',
         record_id: editingUser.user_id,
         old_data: { role: editingUser.role, department_id: editingUser.department_id },

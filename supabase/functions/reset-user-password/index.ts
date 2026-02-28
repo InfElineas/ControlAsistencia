@@ -49,6 +49,8 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("Only superadmins can reset user passwords");
     }
 
+    const sourceIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+
     const { user_id, new_password }: ResetPasswordRequest = await req.json();
 
     if (!user_id || !new_password) {
@@ -78,6 +80,9 @@ serve(async (req: Request): Promise<Response> => {
     await adminClient.from("audit_log").insert({
       user_id: currentUser.id,
       action: "user_password_reset",
+      description: `Reset de contraseña para ${targetProfile?.email || user_id}`,
+      source_ip: sourceIp,
+      metadata: { actor_role: "superadmin" },
       table_name: "auth.users",
       record_id: user_id,
       old_data: {
