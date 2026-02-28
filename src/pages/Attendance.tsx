@@ -14,9 +14,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Calendar, ShieldX, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapAttendanceError } from '@/lib/error-messages';
+import { useUIMode } from '@/hooks/use-ui-mode';
+import { EmployeeMarkPage } from '@/pages/employee/EmployeeMarkPage';
 
 export default function Attendance() {
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
   const { isRestDay } = useRestSchedule();
   const { config, loading: configLoading } = useGeofenceConfig();
   const { isGlobalManager, loading: gmLoading } = useGlobalManagerCheck();
@@ -43,6 +45,7 @@ export default function Attendance() {
     markAttendance,
   } = useAttendance();
 
+  const uiMode = useUIMode(role);
   const [marking, setMarking] = useState(false);
   const [geofenceResult, setGeofenceResult] = useState<{
     isInside: boolean;
@@ -109,6 +112,14 @@ export default function Attendance() {
   };
 
   const isLoading = configLoading || gmLoading || scheduleLoading;
+
+  if (uiMode === 'employee') {
+    return (
+      <AppLayout>
+        <EmployeeMarkPage />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

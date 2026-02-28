@@ -145,6 +145,43 @@ export type Database = {
         }
         Relationships: []
       }
+
+      attendance_incidents: {
+        Row: {
+          created_at: string
+          id: string
+          incident_type: string
+          manager_notes: string | null
+          reason: string | null
+          requested_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          incident_type: string
+          manager_notes?: string | null
+          reason?: string | null
+          requested_at: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          incident_type?: string
+          manager_notes?: string | null
+          reason?: string | null
+          requested_at?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
