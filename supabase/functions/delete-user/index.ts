@@ -42,10 +42,15 @@ serve(async (req: Request): Promise<Response> => {
       .from("user_roles")
       .select("role")
       .eq("user_id", currentUser.id)
-      .single();
+      .in("role", ["global_manager", "superadmin"])
+      .order("role", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (roleError || roleData?.role !== "global_manager") {
-      throw new Error("Only global managers can delete users");
+    const currentRole = roleData?.role;
+
+    if (roleError || !currentRole) {
+      throw new Error("Only global managers or superadmins can delete users");
     }
 
     const { user_id }: DeleteUserRequest = await req.json();
@@ -66,13 +71,35 @@ serve(async (req: Request): Promise<Response> => {
       .eq("user_id", user_id)
       .maybeSingle();
 
-    const { data: targetRole } = await adminClient
+    const { data: targetRoles } = await adminClient
       .from("user_roles")
       .select("role")
-      .eq("user_id", user_id)
-      .maybeSingle();
+      .eq("user_id", user_id);
 
-    if (targetRole?.role === "global_manager") {
+    const targetRoleList = (targetRoles ?? []).map((item) => item.role);
+    const targetHasSuperadmin = targetRoleList.includes("superadmin");
+    const targetHasGlobalManager = targetRoleList.includes("global_manager");
+
+    if (targetHasSuperadmin && currentRole !== "superadmin") {
+      throw new Error("Solo un superadmin puede eliminar otro superadmin");
+    }
+
+    if (targetHasSuperadmin) {
+      const { count, error: countError } = await adminClient
+        .from("user_roles")
+        .select("user_id", { count: "exact", head: true })
+        .eq("role", "superadmin");
+
+      if (countError) {
+        throw countError;
+      }
+
+      if ((count || 0) <= 1) {
+        throw new Error("No puedes eliminar al último superadmin");
+      }
+    }
+
+    if (targetHasGlobalManager) {
       const { count, error: countError } = await adminClient
         .from("user_roles")
         .select("user_id", { count: "exact", head: true })
@@ -101,7 +128,7 @@ serve(async (req: Request): Promise<Response> => {
       old_data: {
         email: targetProfile?.email || null,
         full_name: targetProfile?.full_name || null,
-        role: targetRole?.role || null,
+        roles: targetRoleList,
       },
     });
 
