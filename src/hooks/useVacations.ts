@@ -47,8 +47,8 @@ export function useVacations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const canReview = role === 'global_manager' || role === 'department_head';
-  const canRequestPersonalVacations = role !== 'global_manager';
+  const canReview = role === 'global_manager' || role === 'superadmin' || role === 'department_head';
+  const canRequestPersonalVacations = role !== 'global_manager' && role !== 'superadmin';
 
   const mapVacationModuleError = (error: unknown): string => {
     const message = getErrorMessage(error);
@@ -167,7 +167,7 @@ export function useVacations() {
 
   const requestVacation = useCallback(async (startDate: string, endDate: string, reason?: string) => {
     if (!canRequestPersonalVacations) {
-      return { error: 'Los gestores globales no pueden solicitar vacaciones personales.' };
+      return { error: 'Los gestores globales y superadmins no pueden solicitar vacaciones personales.' };
     }
 
     const { error: rpcError } = await supabase.rpc('request_vacation', {

@@ -11,6 +11,7 @@ import {
   Loader2,
   PlaneTakeoff,
   Settings,
+  ShieldCheck,
   UserCog,
   UserCircle2,
   Users,
@@ -69,7 +70,7 @@ export default function Index() {
   const isRest = isRestDay(today);
   const hasMarkedIn = todayMarks.some((mark) => mark.mark_type === 'IN');
   const hasMarkedOut = todayMarks.some((mark) => mark.mark_type === 'OUT');
-  const isGlobalManager = role === 'global_manager';
+  const isGlobalManager = role === 'global_manager' || role === 'superadmin';
   const isDepartmentHead = role === 'department_head';
 
   const quickAccess: QuickAccessItem[] = [
@@ -123,6 +124,15 @@ export default function Index() {
         route: '/configuration',
       }
     );
+
+    if (role === 'superadmin') {
+      quickAccess.push({
+        label: 'Consola superadmin',
+        description: 'Logs, incidencias y ajustes avanzados',
+        icon: ShieldCheck,
+        route: '/superadmin',
+      });
+    }
   } else if (isDepartmentHead) {
     quickAccess.push({
       label: 'Mi departamento',

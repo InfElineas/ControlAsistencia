@@ -2,8 +2,9 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveAuthRedirectUrl } from '@/lib/auth-redirect';
+import { getHighestRole } from '@/lib/roles';
 
-export type AppRole = 'employee' | 'department_head' | 'global_manager';
+export type AppRole = 'employee' | 'department_head' | 'global_manager' | 'superadmin';
 
 interface UserProfile {
   id: string;
@@ -103,14 +104,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
 
       // Fetch role
-      const { data: roleData, error: roleError } = await supabase
+      const { data: roleRows, error: roleError } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', authUser.id)
-        .maybeSingle();
+        .eq('user_id', authUser.id);
 
       if (roleError) throw roleError;
-      setRole((roleData?.role as AppRole) || 'employee');
+      setRole(getHighestRole((roleRows ?? []).map((row) => row.role)) as AppRole);
     } catch (error) {
       console.error('Error fetching user profile:', error);
       setProfile((prevProfile) =>
