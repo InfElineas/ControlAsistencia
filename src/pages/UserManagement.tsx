@@ -45,6 +45,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useDepartments } from '@/hooks/useDepartments';
 import { Loader2, UserPlus, Shield, Users, Edit, Filter, Trash2 } from 'lucide-react';
 import { z } from 'zod';
+import { getHighestRole } from '@/lib/roles';
 
 interface FunctionErrorPayload {
   error?: string;
@@ -137,9 +138,18 @@ export default function UserManagement() {
 
       if (rolesError) throw rolesError;
 
+      const rolesByUser = (roles ?? []).reduce<Record<string, string[]>>((acc, row) => {
+        if (!acc[row.user_id]) {
+          acc[row.user_id] = [];
+        }
+        acc[row.user_id].push(row.role);
+        return acc;
+      }, {});
+
       const usersWithRoles: UserWithRole[] = (profiles || []).map(profile => {
-        const userRole = roles?.find(r => r.user_id === profile.user_id);
         const dept = departments.find(d => d.id === profile.department_id);
+        const roleForUser = getHighestRole(rolesByUser[profile.user_id] ?? []);
+
         return {
           id: profile.id,
           user_id: profile.user_id,
@@ -147,7 +157,7 @@ export default function UserManagement() {
           full_name: profile.full_name,
           department_id: profile.department_id,
           department_name: dept?.name || 'Sin departamento',
-          role: (userRole?.role as AppRole) || 'employee',
+          role: roleForUser as AppRole,
         };
       });
 
@@ -189,18 +199,12 @@ export default function UserManagement() {
 
       if (profileError) throw profileError;
 
-      const { data: existingRole } = await supabase
+      const { error: deleteRolesError } = await supabase
         .from('user_roles')
-        .select('*')
-        .eq('user_id', editingUser.user_id)
-        .maybeSingle();
+        .delete()
+        .eq('user_id', editingUser.user_id);
 
-      if (existingRole) {
-        await supabase
-          .from('user_roles')
-          .delete()
-          .eq('user_id', editingUser.user_id);
-      }
+      if (deleteRolesError) throw deleteRolesError;
 
       const { error: insertError } = await supabase
         .from('user_roles')
