@@ -6,8 +6,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface DeleteUserRequest {
+interface ResetPasswordRequest {
   user_id: string;
+  new_password: string;
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -38,27 +39,24 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("Unauthorized");
     }
 
-    const { data: roleData, error: roleError } = await userClient
+    const { data: currentRoleRows, error: roleError } = await userClient
       .from("user_roles")
       .select("role")
       .eq("user_id", currentUser.id)
-      .eq("role", "superadmin")
-      .maybeSingle();
+      .eq("role", "superadmin");
 
-    const currentRole = roleData?.role;
-
-    if (roleError || currentRole !== "superadmin") {
-      throw new Error("Only superadmins can delete users");
+    if (roleError || (currentRoleRows ?? []).length === 0) {
+      throw new Error("Only superadmins can reset user passwords");
     }
 
-    const { user_id }: DeleteUserRequest = await req.json();
+    const { user_id, new_password }: ResetPasswordRequest = await req.json();
 
-    if (!user_id) {
-      throw new Error("Missing required field: user_id");
+    if (!user_id || !new_password) {
+      throw new Error("Missing required fields: user_id and new_password");
     }
 
-    if (user_id === currentUser.id) {
-      throw new Error("No puedes eliminar tu propio usuario");
+    if (new_password.length < 8) {
+      throw new Error("La contraseña debe tener al menos 8 caracteres");
     }
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
@@ -69,44 +67,25 @@ serve(async (req: Request): Promise<Response> => {
       .eq("user_id", user_id)
       .maybeSingle();
 
-    const { data: targetRoles } = await adminClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user_id);
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(user_id, {
+      password: new_password,
+    });
 
-    const targetRoleList = (targetRoles ?? []).map((item) => item.role);
-    const targetHasSuperadmin = targetRoleList.includes("superadmin");
-    if (targetHasSuperadmin) {
-      const { count, error: countError } = await adminClient
-        .from("user_roles")
-        .select("user_id", { count: "exact", head: true })
-        .eq("role", "superadmin");
-
-      if (countError) {
-        throw countError;
-      }
-
-      if ((count || 0) <= 1) {
-        throw new Error("No puedes eliminar al último superadmin");
-      }
-    }
-
-
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(user_id);
-
-    if (deleteError) {
-      throw deleteError;
+    if (updateError) {
+      throw updateError;
     }
 
     await adminClient.from("audit_log").insert({
       user_id: currentUser.id,
-      action: "user_deleted",
+      action: "user_password_reset",
       table_name: "auth.users",
       record_id: user_id,
       old_data: {
         email: targetProfile?.email || null,
         full_name: targetProfile?.full_name || null,
-        roles: targetRoleList,
+      },
+      new_data: {
+        reset_by: currentUser.id,
       },
     });
 
@@ -115,7 +94,7 @@ serve(async (req: Request): Promise<Response> => {
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error: unknown) {
-    console.error("Error deleting user:", error);
+    console.error("Error resetting password:", error);
     const message = error instanceof Error ? error.message : "Unexpected error";
     return new Response(JSON.stringify({ error: message }), {
       status: message === "Unauthorized" ? 401 : 400,
