@@ -20,11 +20,10 @@ export function useGlobalManagerCheck() {
           .from('user_roles')
           .select('role')
           .eq('user_id', user.id)
-          .eq('role', 'global_manager')
-          .maybeSingle();
+          .in('role', ['global_manager', 'superadmin']);
 
         if (error) throw error;
-        setIsGlobalManager(!!data);
+        setIsGlobalManager((data ?? []).length > 0);
       } catch (err) {
         console.error('Error checking global manager status:', err);
         setIsGlobalManager(false);

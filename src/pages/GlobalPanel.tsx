@@ -171,7 +171,7 @@ export default function GlobalPanel() {
 
     if (profilesData) {
       // Filter out department heads and global managers (they are not part of attendance statistics)
-      const rolesToExclude = includeHeads ? ['global_manager'] : ['department_head', 'global_manager'];
+      const rolesToExclude = includeHeads ? ['global_manager', 'superadmin'] : ['department_head', 'global_manager', 'superadmin'];
 
       const { data: excludedRoles } = await supabase
         .from('user_roles')
