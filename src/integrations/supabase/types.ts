@@ -655,6 +655,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      execute_superadmin_sql: {
+        Args: { _query: string }
+        Returns: Json
+      }
       is_global_manager: { Args: { _user_id: string }; Returns: boolean }
       is_head_of_department: {
         Args: { _dept_id: string; _user_id: string }
