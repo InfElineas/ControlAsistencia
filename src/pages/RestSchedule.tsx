@@ -46,12 +46,20 @@ export default function RestSchedule() {
     restGroups,
     currentGroupId,
     groupMode,
+    canUsePersonalSchedule,
     validateRestDaysSeparation,
   } = useRestSchedule(isGlobalManager ? selectedUserId : null);
 
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
-  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().split('T')[0]);
+  const [effectiveFrom, setEffectiveFrom] = useState(() => {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const mondayDistance = currentDay === 0 ? 6 : currentDay - 1;
+    const weekStartDate = new Date(now);
+    weekStartDate.setDate(now.getDate() - mondayDistance);
+    return weekStartDate.toISOString().split('T')[0];
+  });
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -237,6 +245,17 @@ export default function RestSchedule() {
           </Card>
         )}
 
+        {canUsePersonalSchedule && (
+          <Card className="border-success/30 bg-success/5">
+            <CardHeader>
+              <CardTitle className="text-lg">Descanso personal del jefe de departamento</CardTitle>
+              <CardDescription>
+                Aunque tu departamento use grupos de descanso, aquí puedes configurar tus días personales semanalmente.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        )}
+
         {currentSchedule && (
           <Card className="border-success/30 bg-success/5">
             <CardHeader>
@@ -274,7 +293,7 @@ export default function RestSchedule() {
               <CardTitle className="text-lg">Nueva Configuración</CardTitle>
             </div>
             <CardDescription>
-              {groupMode.enabled ? 'Asigna un grupo de descanso al trabajador' : 'Selecciona los días que descansarás cada semana'}
+              {groupMode.enabled ? 'Asigna un grupo de descanso al trabajador' : 'Selecciona los días que descansarás esta semana'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
