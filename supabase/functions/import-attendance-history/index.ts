@@ -52,10 +52,10 @@ serve(async (req: Request): Promise<Response> => {
       .from("user_roles")
       .select("role")
       .eq("user_id", currentUser.id)
-      .eq("role", "superadmin");
+      .in("role", ["global_manager", "superadmin"]);
 
     if (roleError || (roleRows ?? []).length === 0) {
-      throw new Error("Only superadmins can import attendance history");
+      throw new Error("Only global managers or superadmins can import attendance history");
     }
 
     const sourceIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
@@ -146,7 +146,7 @@ serve(async (req: Request): Promise<Response> => {
       description: `Importación histórica desde Excel (${payload.source_file_name || "archivo"})`,
       source_ip: sourceIp,
       metadata: {
-        actor_role: "superadmin",
+        actor_role: (roleRows ?? []).some((row) => row.role === "superadmin") ? "superadmin" : "global_manager",
         source_file_name: payload.source_file_name || null,
         total_rows_received: rows.length,
         valid_rows: normalizedRows.length,
