@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +23,32 @@ interface Incident {
   reason: string | null;
 }
 
+interface DBErrorShape {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+}
+
+function isSchemaNotReadyError(error: unknown): boolean {
+  const dbError = error as DBErrorShape | null;
+  if (!dbError) return false;
+  return dbError.code === '42P01' || dbError.message?.toLowerCase().includes('attendance_incidents') === true;
+}
+
+function buildErrorMessage(error: unknown): string {
+  const dbError = error as DBErrorShape | null;
+  if (!dbError) {
+    return 'No fue posible completar la operación.';
+  }
+
+  if (isSchemaNotReadyError(error)) {
+    return 'Falta actualizar la base de datos: ejecuta las migraciones para habilitar incidencias.';
+  }
+
+  return dbError.message || 'No fue posible completar la operación.';
+}
+
 export function EmployeeIncidentsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -30,7 +56,7 @@ export function EmployeeIncidentsPage() {
   const [requestedAt, setRequestedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   const [reason, setReason] = useState('');
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['incidents', user?.id],
     enabled: !!user,
     queryFn: async () => {
@@ -42,7 +68,10 @@ export function EmployeeIncidentsPage() {
       if (error) throw error;
       return (data || []) as Incident[];
     },
+    retry: false,
   });
+
+  const schemaNotReady = useMemo(() => isSchemaNotReadyError(error), [error]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -59,7 +88,7 @@ export function EmployeeIncidentsPage() {
       setReason('');
       queryClient.invalidateQueries({ queryKey: ['incidents', user?.id] });
     },
-    onError: () => toast.error('No fue posible crear la incidencia'),
+    onError: (error) => toast.error(buildErrorMessage(error)),
   });
 
   const onSubmit = (event: FormEvent) => {
@@ -69,28 +98,59 @@ export function EmployeeIncidentsPage() {
 
   return (
     <div className="space-y-4">
+      {schemaNotReady && (
+        <Card className="border-warning/40 bg-warning/10">
+          <CardContent className="pt-6 text-sm">
+            <p className="font-semibold text-warning">Incidencias requiere migración de base de datos</p>
+            <p className="mt-1 text-muted-foreground">
+              Ejecuta las migraciones pendientes (incluida <code>20260228194000_add_attendance_incidents.sql</code>) y recarga esta pantalla.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
-        <CardHeader><CardTitle className="text-base">Nueva incidencia</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Nueva incidencia</CardTitle>
+        </CardHeader>
         <CardContent>
           <form className="space-y-3" onSubmit={onSubmit}>
             <Select value={type} onValueChange={(value) => setType(value as IncidentType)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {INCIDENT_TYPES.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}
+                {INCIDENT_TYPES.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Input type="datetime-local" value={requestedAt} onChange={(e) => setRequestedAt(e.target.value)} required />
             <Textarea placeholder="Motivo (opcional)" value={reason} onChange={(e) => setReason(e.target.value)} />
-            <Button className="w-full" disabled={mutation.isPending}>{mutation.isPending ? 'Guardando...' : 'Nueva incidencia'}</Button>
+            <Button className="w-full" disabled={mutation.isPending || schemaNotReady}>
+              {mutation.isPending ? 'Guardando...' : 'Nueva incidencia'}
+            </Button>
           </form>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Mis incidencias</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="text-base">Mis incidencias</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
+              Recargar
+            </Button>
+          </div>
+        </CardHeader>
         <CardContent className="space-y-3">
           {isLoading && <Skeleton className="h-20 w-full" />}
-          {isError && <p className="text-sm text-destructive">Error al cargar incidencias.</p>}
+          {isError && <p className="text-sm text-destructive">{buildErrorMessage(error)}</p>}
+          {!isLoading && !isError && (data || []).length === 0 && (
+            <p className="text-sm text-muted-foreground">No tienes incidencias creadas todavía.</p>
+          )}
           {(data || []).map((item) => (
             <div key={item.id} className="rounded-xl border p-3 text-sm">
               <div className="flex items-center justify-between">

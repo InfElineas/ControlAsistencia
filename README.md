@@ -144,3 +144,20 @@ Ejemplos:
 - `Mi semana` → `/history`
 - `Incidencias` → `/incidents`
 - `Perfil` → `/profile`
+
+### Requisito de base de datos para Incidencias
+
+Para que la pestaña **Incidencias** funcione (listar/crear), es obligatorio tener aplicada la migración:
+
+- `supabase/migrations/20260228194000_add_attendance_incidents.sql`
+
+Si no está aplicada, la UI mostrará un aviso de "falta actualizar la base de datos" y deshabilitará la creación.
+
+Comandos sugeridos (según tu flujo):
+
+```bash
+# Local / proyecto enlazado
+supabase db push
+
+# O ejecuta específicamente la migración en tu pipeline de deploy
+```
