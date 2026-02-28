@@ -16,6 +16,7 @@ import {
   UserCircle2,
   Users,
   XCircle,
+  TriangleAlert,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAttendance } from '@/hooks/useAttendance';
@@ -24,6 +25,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useUIMode } from '@/hooks/use-ui-mode';
 
 interface QuickAccessItem {
   label: string;
@@ -52,6 +54,7 @@ export default function Index() {
   const { user, profile, role, loading: authLoading } = useAuth();
   const { todayMarks, lastMark } = useAttendance();
   const { isRestDay, currentSchedule } = useRestSchedule();
+  const uiMode = useUIMode(role);
   const isGlobalManager = role === 'global_manager' || role === 'superadmin';
   const isDepartmentHead = role === 'department_head';
 
@@ -60,6 +63,12 @@ export default function Index() {
       navigate('/auth');
     }
   }, [authLoading, navigate, user]);
+
+  useEffect(() => {
+    if (!authLoading && user && uiMode === 'employee') {
+      navigate('/attendance', { replace: true });
+    }
+  }, [authLoading, navigate, uiMode, user]);
 
   useEffect(() => {
     if (!user?.id || isGlobalManager || currentSchedule) return;
@@ -97,6 +106,12 @@ export default function Index() {
       description: 'Actualiza tus datos personales',
       icon: UserCircle2,
       route: '/profile',
+    },
+    {
+      label: role === 'employee' ? 'Mis incidencias' : 'Revisar incidencias',
+      description: role === 'employee' ? 'Solicitudes y estado' : 'Aprobación y seguimiento',
+      icon: TriangleAlert,
+      route: '/incidents',
     },
   ];
 
