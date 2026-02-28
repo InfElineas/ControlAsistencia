@@ -12,7 +12,7 @@ interface CreateUserRequest {
   password: string;
   full_name: string;
   department_id: string;
-  role: 'employee' | 'department_head' | 'global_manager';
+  role: 'employee' | 'department_head' | 'global_manager' | 'superadmin';
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -44,18 +44,28 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // Check if user is global_manager
-    const { data: roleData, error: roleError } = await userClient
+    const { data: roleRows, error: roleError } = await userClient
       .from('user_roles')
       .select('role')
       .eq('user_id', currentUser.id)
-      .single();
+      .in('role', ['global_manager', 'superadmin']);
 
-    if (roleError || roleData?.role !== 'global_manager') {
-      throw new Error("Only global managers can create users");
+    if (roleError) {
+      throw roleError;
+    }
+
+    const currentRoles = (roleRows ?? []).map((item) => item.role);
+    const isAllowedCreator = currentRoles.includes('global_manager') || currentRoles.includes('superadmin');
+    if (!isAllowedCreator) {
+      throw new Error("Only global managers or superadmins can create users");
     }
 
     // Parse request body
     const { email, password, full_name, department_id, role }: CreateUserRequest = await req.json();
+
+    if (role === 'superadmin' && !currentRoles.includes('superadmin')) {
+      throw new Error('Solo un superadmin puede crear otro superadmin');
+    }
 
     // Validate required fields
     if (!email || !password || !full_name || !department_id || !role) {

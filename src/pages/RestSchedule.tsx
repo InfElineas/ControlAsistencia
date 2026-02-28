@@ -32,7 +32,7 @@ const DAYS_OF_WEEK = [
 
 export default function RestSchedule() {
   const { user, role } = useAuth();
-  const isGlobalManager = role === 'global_manager';
+  const isGlobalManager = role === 'global_manager' || role === 'superadmin';
   const [workerOptions, setWorkerOptions] = useState<WorkerOption[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [loadingWorkers, setLoadingWorkers] = useState(false);
@@ -74,7 +74,7 @@ export default function RestSchedule() {
         supabase
           .from('user_roles')
           .select('user_id')
-          .eq('role', 'global_manager'),
+          .in('role', ['global_manager', 'superadmin']),
       ]);
 
       if (profilesError || rolesError) {

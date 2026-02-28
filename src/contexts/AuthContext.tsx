@@ -3,7 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { resolveAuthRedirectUrl } from '@/lib/auth-redirect';
 
-export type AppRole = 'employee' | 'department_head' | 'global_manager';
+export type AppRole = 'employee' | 'department_head' | 'global_manager' | 'superadmin';
 
 interface UserProfile {
   id: string;

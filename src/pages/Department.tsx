@@ -119,7 +119,7 @@ export default function Department() {
     const { data: excludedRoles } = await supabase
       .from('user_roles')
       .select('user_id')
-      .in('role', ['department_head', 'global_manager']);
+      .in('role', ['department_head', 'global_manager', 'superadmin']);
 
     const { data: rolesData } = await supabase
       .from('user_roles')
