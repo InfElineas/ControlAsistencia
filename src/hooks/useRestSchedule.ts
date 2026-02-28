@@ -25,8 +25,10 @@ interface GroupModeInfo {
 }
 
 export function useRestSchedule(targetUserId?: string | null) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const effectiveUserId = targetUserId ?? user?.id ?? null;
+  const isOwnSchedule = !targetUserId || targetUserId === user?.id;
+  const canUsePersonalSchedule = role === 'department_head' && isOwnSchedule;
   const [schedules, setSchedules] = useState<RestSchedule[]>([]);
   const [currentSchedule, setCurrentSchedule] = useState<RestSchedule | null>(null);
   const [restGroups, setRestGroups] = useState<RestGroup[]>([]);
@@ -57,12 +59,24 @@ export function useRestSchedule(targetUserId?: string | null) {
       if (departmentError) throw departmentError;
 
       const isGroupModeEnabled = Boolean(departmentData.rest_groups_enabled);
+
+      const now = new Date();
+      const currentDay = now.getDay();
+      const mondayDistance = currentDay === 0 ? 6 : currentDay - 1;
+      const weekStartDate = new Date(now);
+      weekStartDate.setDate(now.getDate() - mondayDistance);
+      const weekEndDate = new Date(weekStartDate);
+      weekEndDate.setDate(weekStartDate.getDate() + 6);
+
+      const weekStart = weekStartDate.toISOString().slice(0, 10);
+      const weekEnd = weekEndDate.toISOString().slice(0, 10);
+
       setGroupMode({
-        enabled: isGroupModeEnabled,
+        enabled: isGroupModeEnabled && !canUsePersonalSchedule,
         departmentName: departmentData.name,
       });
 
-      if (isGroupModeEnabled) {
+      if (isGroupModeEnabled && !canUsePersonalSchedule) {
         const { data: groupsData, error: groupsError } = await supabase
           .from('rest_groups')
           .select('id, department_id, name, days_of_week')
@@ -82,8 +96,8 @@ export function useRestSchedule(targetUserId?: string | null) {
 
         if (membersError) throw membersError;
 
-        const today = new Date().toISOString().split('T')[0];
-        const currentMember = (membersData || []).find((member) => member.effective_from <= today) || null;
+        const currentMember =
+          (membersData || []).find((member) => member.effective_from >= weekStart && member.effective_from <= weekEnd) || null;
         setCurrentGroupId(currentMember?.group_id ?? null);
 
         const currentGroup = groups.find((group) => group.id === currentMember?.group_id);
@@ -92,9 +106,9 @@ export function useRestSchedule(targetUserId?: string | null) {
             id: currentGroup.id,
             user_id: effectiveUserId,
             days_of_week: currentGroup.days_of_week,
-            effective_from: currentMember?.effective_from ?? today,
+            effective_from: currentMember?.effective_from ?? weekStart,
             notes: `Grupo: ${currentGroup.name}`,
-            created_at: today,
+            created_at: weekStart,
           });
         } else {
           setCurrentSchedule(null);
@@ -116,15 +130,15 @@ export function useRestSchedule(targetUserId?: string | null) {
       setRestGroups([]);
       setCurrentGroupId(null);
 
-      const today = new Date().toISOString().split('T')[0];
-      const current = (data || []).find((schedule) => schedule.effective_from <= today);
+      const current =
+        (data || []).find((schedule) => schedule.effective_from >= weekStart && schedule.effective_from <= weekEnd) || null;
       setCurrentSchedule(current || null);
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [effectiveUserId]);
+  }, [canUsePersonalSchedule, effectiveUserId]);
 
   useEffect(() => {
     if (effectiveUserId) {
@@ -278,6 +292,7 @@ export function useRestSchedule(targetUserId?: string | null) {
     restGroups,
     currentGroupId,
     groupMode,
+    canUsePersonalSchedule,
     isRestDay,
     validateRestDaysSeparation,
     refetch: fetchSchedules,

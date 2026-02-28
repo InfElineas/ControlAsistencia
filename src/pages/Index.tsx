@@ -11,6 +11,7 @@ import {
   Loader2,
   PlaneTakeoff,
   Settings,
+  ShieldCheck,
   UserCog,
   UserCircle2,
   Users,
@@ -22,6 +23,7 @@ import { useRestSchedule } from '@/hooks/useRestSchedule';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface QuickAccessItem {
   label: string;
@@ -50,12 +52,31 @@ export default function Index() {
   const { user, profile, role, loading: authLoading } = useAuth();
   const { todayMarks, lastMark } = useAttendance();
   const { isRestDay, currentSchedule } = useRestSchedule();
+  const isGlobalManager = role === 'global_manager' || role === 'superadmin';
+  const isDepartmentHead = role === 'department_head';
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
     }
   }, [authLoading, navigate, user]);
+
+  useEffect(() => {
+    if (!user?.id || isGlobalManager || currentSchedule) return;
+
+    const now = new Date();
+    const day = now.getDay();
+    const mondayDistance = day === 0 ? 6 : day - 1;
+    const weekStartDate = new Date(now);
+    weekStartDate.setDate(now.getDate() - mondayDistance);
+    const weekKey = weekStartDate.toISOString().slice(0, 10);
+    const reminderKey = `rest-reminder-${user.id}-${weekKey}`;
+
+    if (localStorage.getItem(reminderKey)) return;
+
+    toast.warning('Debes marcar tus días de descanso de esta semana en "Mis Descansos".');
+    localStorage.setItem(reminderKey, '1');
+  }, [currentSchedule, isGlobalManager, user?.id]);
 
   if (authLoading || !user) {
     return (
@@ -69,8 +90,6 @@ export default function Index() {
   const isRest = isRestDay(today);
   const hasMarkedIn = todayMarks.some((mark) => mark.mark_type === 'IN');
   const hasMarkedOut = todayMarks.some((mark) => mark.mark_type === 'OUT');
-  const isGlobalManager = role === 'global_manager';
-  const isDepartmentHead = role === 'department_head';
 
   const quickAccess: QuickAccessItem[] = [
     {
@@ -123,6 +142,15 @@ export default function Index() {
         route: '/configuration',
       }
     );
+
+    if (role === 'superadmin') {
+      quickAccess.push({
+        label: 'Consola superadmin',
+        description: 'Logs, incidencias y ajustes avanzados',
+        icon: ShieldCheck,
+        route: '/superadmin',
+      });
+    }
   } else if (isDepartmentHead) {
     quickAccess.push({
       label: 'Mi departamento',

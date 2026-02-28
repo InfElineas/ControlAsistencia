@@ -9,6 +9,7 @@ import {
   Users,
   Building2,
   UserCog,
+  ShieldCheck,
   User,
   LogOut,
   Menu,
@@ -30,16 +31,17 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/', label: 'Inicio', icon: LayoutDashboard },
-  { href: '/attendance', label: 'Marcar', icon: Clock, excludeRoles: ['global_manager'] },
-  { href: '/history', label: 'Mi Historial', icon: History, excludeRoles: ['global_manager'] },
+  { href: '/attendance', label: 'Marcar', icon: Clock, excludeRoles: ['global_manager', 'superadmin'] },
+  { href: '/history', label: 'Mi Historial', icon: History, excludeRoles: ['global_manager', 'superadmin'] },
   { href: '/profile', label: 'Mi perfil', icon: User },
   { href: '/rest-schedule', label: 'Descansos', icon: Calendar },
-  { href: '/vacations', label: 'Vacaciones', icon: PlaneTakeoff, excludeRoles: ['global_manager'] },
+  { href: '/vacations', label: 'Vacaciones', icon: PlaneTakeoff, excludeRoles: ['global_manager', 'superadmin'] },
   { href: '/department', label: 'Departamento', icon: Users, roles: ['department_head'] },
-  { href: '/global', label: 'Panel Global', icon: Users, roles: ['global_manager'] },
-  { href: '/users', label: 'Usuarios', icon: UserCog, roles: ['global_manager'] },
-  { href: '/departments-admin', label: 'Departamentos', icon: Building2, roles: ['global_manager'] },
-  { href: '/configuration', label: 'Configuración', icon: Settings, roles: ['global_manager'] },
+  { href: '/global', label: 'Panel Global', icon: Users, roles: ['global_manager', 'superadmin'] },
+  { href: '/users', label: 'Usuarios', icon: UserCog, roles: ['global_manager', 'superadmin'] },
+  { href: '/departments-admin', label: 'Departamentos', icon: Building2, roles: ['global_manager', 'superadmin'] },
+  { href: '/configuration', label: 'Configuración', icon: Settings, roles: ['global_manager', 'superadmin'] },
+  { href: '/superadmin', label: 'Superadmin', icon: ShieldCheck, roles: ['superadmin'] },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
