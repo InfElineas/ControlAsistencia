@@ -87,6 +87,7 @@ const createUserSchema = z.object({
 
 export default function UserManagement() {
   const { role, user: currentUser } = useAuth();
+  const canDeleteUsers = role === 'superadmin';
   const { toast } = useToast();
   const { departments } = useDepartments();
   
@@ -299,7 +300,7 @@ export default function UserManagement() {
   };
 
   const handleDeleteUser = async () => {
-    if (!deletingUser) {
+    if (!deletingUser || !canDeleteUsers) {
       return;
     }
 
@@ -415,7 +416,8 @@ export default function UserManagement() {
               <div>
                 <CardTitle>Usuarios del Sistema</CardTitle>
                 <CardDescription>
-                  Haz clic en un usuario para editar su rol y departamento
+                  Haz clic en un usuario para editar su rol y departamento.
+                  {role !== 'superadmin' ? ' Solo superadmin puede eliminar usuarios.' : ''}
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -486,16 +488,18 @@ export default function UserManagement() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenDeleteDialog(user)}
-                            disabled={currentUser?.id === user.user_id}
-                            aria-label={`Eliminar ${user.full_name}`}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {canDeleteUsers && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenDeleteDialog(user)}
+                              disabled={currentUser?.id === user.user_id}
+                              aria-label={`Eliminar ${user.full_name}`}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

@@ -6,16 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { AlertTriangle, Database, FileWarning, RefreshCcw, Settings, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Database, FileWarning, KeyRound, RefreshCcw, Settings, ShieldCheck, Trash2, Users } from 'lucide-react';
+import { getHighestRole } from '@/lib/roles';
+
 
 type AuditLog = {
   id: string;
   action: string;
   table_name: string | null;
   created_at: string;
-  old_data: Record<string, unknown> | null;
-  new_data: Record<string, unknown> | null;
 };
 
 type AppConfig = {
@@ -25,29 +26,63 @@ type AppConfig = {
   description: string | null;
 };
 
+type ManagedUser = {
+  user_id: string;
+  full_name: string;
+  email: string;
+  role: string;
+};
+
 export default function SuperAdmin() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const { toast } = useToast();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [configs, setConfigs] = useState<AppConfig[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [draftValues, setDraftValues] = useState<Record<string, string>>({});
+  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
+  const [accountActionUserId, setAccountActionUserId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [{ data: logData, error: logError }, { data: configData, error: configError }] = await Promise.all([
-        supabase.from('audit_log').select('id, action, table_name, created_at, old_data, new_data').order('created_at', { ascending: false }).limit(100),
+      const [
+        { data: logData, error: logError },
+        { data: configData, error: configError },
+        { data: profileData, error: profileError },
+        { data: roleData, error: rolesError },
+      ] = await Promise.all([
+        supabase.from('audit_log').select('id, action, table_name, created_at').order('created_at', { ascending: false }).limit(100),
         supabase.from('app_config').select('id, key, value, description').order('key', { ascending: true }),
+        supabase.from('profiles').select('user_id, full_name, email').order('full_name', { ascending: true }),
+        supabase.from('user_roles').select('user_id, role'),
       ]);
 
       if (logError) throw logError;
       if (configError) throw configError;
+      if (profileError) throw profileError;
+      if (rolesError) throw rolesError;
 
       const cfg = (configData ?? []) as AppConfig[];
       setLogs((logData ?? []) as AuditLog[]);
       setConfigs(cfg);
+
+      const rolesByUser = (roleData ?? []).reduce<Record<string, string[]>>((acc, item) => {
+        if (!acc[item.user_id]) acc[item.user_id] = [];
+        acc[item.user_id].push(item.role);
+        return acc;
+      }, {});
+
+      const usersData: ManagedUser[] = (profileData ?? []).map((profile) => ({
+        user_id: profile.user_id,
+        full_name: profile.full_name,
+        email: profile.email,
+        role: getHighestRole(rolesByUser[profile.user_id] ?? []),
+      }));
+
+      setUsers(usersData);
       setDraftValues(
         cfg.reduce<Record<string, string>>((acc, item) => {
           acc[item.key] = typeof item.value === 'string' ? item.value : JSON.stringify(item.value);
@@ -108,6 +143,85 @@ export default function SuperAdmin() {
     }
   };
 
+  const resetUserPassword = async (targetUserId: string) => {
+    const newPassword = (passwordDrafts[targetUserId] ?? '').trim();
+
+    if (newPassword.length < 8) {
+      toast({
+        title: 'Contraseña inválida',
+        description: 'La nueva contraseña debe tener al menos 8 caracteres.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setAccountActionUserId(targetUserId);
+      const { data, error } = await supabase.functions.invoke('reset-user-password', {
+        body: {
+          user_id: targetUserId,
+          new_password: newPassword,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setPasswordDrafts((prev) => ({ ...prev, [targetUserId]: '' }));
+      toast({
+        title: 'Contraseña actualizada',
+        description: 'La contraseña del usuario fue restablecida correctamente.',
+      });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo restablecer la contraseña del usuario.',
+        variant: 'destructive',
+      });
+    } finally {
+      setAccountActionUserId(null);
+    }
+  };
+
+  const deleteUser = async (targetUserId: string) => {
+    if (targetUserId === user?.id) {
+      toast({
+        title: 'Operación bloqueada',
+        description: 'No puedes eliminar tu propio usuario desde esta consola.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setAccountActionUserId(targetUserId);
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: {
+          user_id: targetUserId,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast({
+        title: 'Usuario eliminado',
+        description: 'Se eliminó la cuenta correctamente.',
+      });
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: 'Error al eliminar',
+        description: 'No se pudo eliminar el usuario.',
+        variant: 'destructive',
+      });
+    } finally {
+      setAccountActionUserId(null);
+    }
+  };
+
   if (role !== 'superadmin') {
     return (
       <AppLayout>
@@ -123,10 +237,10 @@ export default function SuperAdmin() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Consola Superadmin</h1>
-          <p className="text-muted-foreground">Auditoría avanzada, monitoreo de incidentes y configuración global.</p>
+          <p className="text-muted-foreground">Auditoría avanzada, monitoreo de incidentes, gestión de cuentas y configuración global.</p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Eventos auditados</CardTitle>
@@ -154,6 +268,16 @@ export default function SuperAdmin() {
             <CardContent className="flex items-center justify-between">
               <span className="text-2xl font-bold">{configs.length}</span>
               <Settings className="h-5 w-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Cuentas del sistema</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between">
+              <span className="text-2xl font-bold">{users.length}</span>
+              <Users className="h-5 w-5 text-muted-foreground" />
             </CardContent>
           </Card>
         </div>
@@ -184,6 +308,58 @@ export default function SuperAdmin() {
                 </div>
               ))
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Gestión total de cuentas</CardTitle>
+            <CardDescription>
+              Como superadmin puedes restablecer contraseñas y eliminar cuentas directamente desde la plataforma.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3 max-h-[460px] overflow-auto">
+            {users.map((managedUser) => (
+              <div key={managedUser.user_id} className="rounded-lg border p-3 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-sm">{managedUser.full_name}</p>
+                    <p className="text-xs text-muted-foreground">{managedUser.email}</p>
+                  </div>
+                  <Badge variant="secondary" className="capitalize">{managedUser.role.replace('_', ' ')}</Badge>
+                </div>
+
+                <div className="grid gap-2 md:grid-cols-[1fr_auto_auto]">
+                  <Input
+                    type="password"
+                    value={passwordDrafts[managedUser.user_id] ?? ''}
+                    onChange={(event) =>
+                      setPasswordDrafts((prev) => ({
+                        ...prev,
+                        [managedUser.user_id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Nueva contraseña (mínimo 8 caracteres)"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => resetUserPassword(managedUser.user_id)}
+                    disabled={accountActionUserId === managedUser.user_id}
+                  >
+                    <KeyRound className="h-4 w-4 mr-2" />
+                    Reset password
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => deleteUser(managedUser.user_id)}
+                    disabled={accountActionUserId === managedUser.user_id || managedUser.user_id === user?.id}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Eliminar
+                  </Button>
+                </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
 
