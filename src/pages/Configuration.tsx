@@ -11,9 +11,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, MapPin, Clock, Settings, Save } from 'lucide-react';
+import { Loader2, MapPin, Clock, Settings, Save, FileSpreadsheet, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapGenericActionError } from '@/lib/error-messages';
+import * as XLSX from 'xlsx';
+
+type AttendanceImportSummary = {
+  imported_marks: number;
+  missing_emails: string[];
+};
 
 export default function Configuration() {
   const { config, loading, updateConfig } = useGeofenceConfig();
@@ -33,6 +39,8 @@ export default function Configuration() {
     vacationDaysPerWorkedDay: 0.0833333333,
   });
   const [savingGeneral, setSavingGeneral] = useState(false);
+  const [importingHistory, setImportingHistory] = useState(false);
+  const [importSummary, setImportSummary] = useState<AttendanceImportSummary | null>(null);
 
   // Update form when config loads
   useEffect(() => {
@@ -129,6 +137,94 @@ export default function Configuration() {
       toast.success('Configuración general guardada correctamente');
     } finally {
       setSavingGeneral(false);
+    }
+  };
+
+  const normalizeHeader = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, '_');
+
+  const parseExcelDate = (value: unknown): string | null => {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return trimmed;
+      }
+
+      const parsed = new Date(trimmed);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed.toISOString().slice(0, 10);
+      }
+      return null;
+    }
+
+    if (typeof value === 'number') {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (!parsed) return null;
+      const year = parsed.y.toString().padStart(4, '0');
+      const month = parsed.m.toString().padStart(2, '0');
+      const day = parsed.d.toString().padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    return null;
+  };
+
+  const handleImportAttendanceHistory = async (file: File) => {
+    try {
+      setImportingHistory(true);
+      setImportSummary(null);
+
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' });
+
+      const preparedRows = rawRows.flatMap((row) => {
+        const normalized = Object.entries(row).reduce<Record<string, unknown>>((acc, [key, val]) => {
+          acc[normalizeHeader(key)] = val;
+          return acc;
+        }, {});
+
+        const emailValue = String(normalized.email ?? normalized.correo ?? '').trim().toLowerCase();
+        const dateValue = parseExcelDate(normalized.fecha ?? normalized.date ?? normalized.fecha_trabajo ?? normalized.work_date ?? null);
+
+        if (!emailValue || !dateValue) return [];
+
+        return [{ email: emailValue, date: dateValue }];
+      });
+
+      if (preparedRows.length === 0) {
+        throw new Error('No se encontraron filas válidas (requiere email/correo y fecha/date)');
+      }
+
+      const { data, error } = await supabase.functions.invoke('import-attendance-history', {
+        body: {
+          source_file_name: file.name,
+          rows: preparedRows,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const missingEmails = Array.isArray(data?.missing_emails)
+        ? data.missing_emails.map((item: unknown) => String(item))
+        : [];
+
+      setImportSummary({
+        imported_marks: Number(data?.imported_marks ?? 0),
+        missing_emails: missingEmails,
+      });
+
+      toast.success(`Histórico importado. Marcajes agregados: ${Number(data?.imported_marks ?? 0)}`);
+    } catch (error) {
+      console.error(error);
+      toast.error('No se pudo importar el histórico. Verifica formato y permisos.');
+    } finally {
+      setImportingHistory(false);
     }
   };
 
@@ -399,6 +495,66 @@ export default function Configuration() {
                     </>
                   )}
                 </Button>
+
+                <Card className="border-dashed">
+                  <CardHeader className="space-y-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      Importar asistencia histórica (Excel)
+                    </CardTitle>
+                    <CardDescription>
+                      Carga datos anteriores para recalcular métricas anuales y vacaciones acumuladas.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+                      <p className="font-medium text-foreground">Formato recomendado (una fila por día trabajado):</p>
+                      <p>Columnas obligatorias: <strong>email</strong> (o <strong>correo</strong>) y <strong>fecha</strong> (o <strong>date</strong>).</p>
+                      <p>Fecha admitida: <strong>YYYY-MM-DD</strong> o fecha válida de Excel.</p>
+                      <p>Columnas opcionales (se ignoran): nombre, departamento, estado, observaciones.</p>
+                    </div>
+
+                    <Input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      disabled={importingHistory}
+                      onChange={async (event) => {
+                        const file = event.target.files?.[0];
+                        if (!file) return;
+
+                        await handleImportAttendanceHistory(file);
+                        event.currentTarget.value = '';
+                      }}
+                    />
+
+                    {importingHistory && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-2">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Importando histórico...
+                      </p>
+                    )}
+
+                    {importSummary && (
+                      <div className="rounded-md border p-3 text-sm space-y-1">
+                        <p><strong>Marcajes importados:</strong> {importSummary.imported_marks}</p>
+                        <p><strong>Correos no encontrados:</strong> {importSummary.missing_emails.length}</p>
+                        {importSummary.missing_emails.length > 0 && (
+                          <p className="text-xs text-muted-foreground break-words">
+                            {importSummary.missing_emails.slice(0, 20).join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="text-xs text-muted-foreground flex items-start gap-2">
+                      <Upload className="h-3.5 w-3.5 mt-0.5" />
+                      <span>
+                        Si tu Excel está en formato anual por columnas (ene-dic), primero conviértelo a filas
+                        <strong> (email + fecha)</strong> para una importación compatible.
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
               </CardContent>
             </Card>
           </TabsContent>

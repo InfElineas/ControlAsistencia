@@ -45,6 +45,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useDepartments } from '@/hooks/useDepartments';
 import { Loader2, UserPlus, Shield, Users, Edit, Filter, Trash2 } from 'lucide-react';
 import { z } from 'zod';
+import { getHighestRole } from '@/lib/roles';
 
 interface FunctionErrorPayload {
   error?: string;
@@ -81,11 +82,12 @@ const createUserSchema = z.object({
   password: z.string().min(6, 'Mínimo 6 caracteres'),
   full_name: z.string().min(2, 'Nombre requerido'),
   department_id: z.string().min(1, 'Selecciona un departamento'),
-  role: z.enum(['employee', 'department_head', 'global_manager']),
+  role: z.enum(['employee', 'department_head', 'global_manager', 'superadmin']),
 });
 
 export default function UserManagement() {
   const { role, user: currentUser } = useAuth();
+  const canDeleteUsers = role === 'superadmin';
   const { toast } = useToast();
   const { departments } = useDepartments();
   
@@ -137,9 +139,18 @@ export default function UserManagement() {
 
       if (rolesError) throw rolesError;
 
+      const rolesByUser = (roles ?? []).reduce<Record<string, string[]>>((acc, row) => {
+        if (!acc[row.user_id]) {
+          acc[row.user_id] = [];
+        }
+        acc[row.user_id].push(row.role);
+        return acc;
+      }, {});
+
       const usersWithRoles: UserWithRole[] = (profiles || []).map(profile => {
-        const userRole = roles?.find(r => r.user_id === profile.user_id);
         const dept = departments.find(d => d.id === profile.department_id);
+        const roleForUser = getHighestRole(rolesByUser[profile.user_id] ?? []);
+
         return {
           id: profile.id,
           user_id: profile.user_id,
@@ -147,7 +158,7 @@ export default function UserManagement() {
           full_name: profile.full_name,
           department_id: profile.department_id,
           department_name: dept?.name || 'Sin departamento',
-          role: (userRole?.role as AppRole) || 'employee',
+          role: roleForUser as AppRole,
         };
       });
 
@@ -189,18 +200,12 @@ export default function UserManagement() {
 
       if (profileError) throw profileError;
 
-      const { data: existingRole } = await supabase
+      const { error: deleteRolesError } = await supabase
         .from('user_roles')
-        .select('*')
-        .eq('user_id', editingUser.user_id)
-        .maybeSingle();
+        .delete()
+        .eq('user_id', editingUser.user_id);
 
-      if (existingRole) {
-        await supabase
-          .from('user_roles')
-          .delete()
-          .eq('user_id', editingUser.user_id);
-      }
+      if (deleteRolesError) throw deleteRolesError;
 
       const { error: insertError } = await supabase
         .from('user_roles')
@@ -209,8 +214,10 @@ export default function UserManagement() {
       if (insertError) throw insertError;
 
       await supabase.from('audit_log').insert({
-        user_id: editingUser.user_id,
+        user_id: currentUser?.id ?? null,
         action: 'role_changed',
+        description: `Rol actualizado para ${editingUser.email}`,
+        metadata: { actor_role: role ?? 'unknown' },
         table_name: 'user_roles',
         record_id: editingUser.user_id,
         old_data: { role: editingUser.role, department_id: editingUser.department_id },
@@ -295,7 +302,7 @@ export default function UserManagement() {
   };
 
   const handleDeleteUser = async () => {
-    if (!deletingUser) {
+    if (!deletingUser || !canDeleteUsers) {
       return;
     }
 
@@ -334,6 +341,7 @@ export default function UserManagement() {
       employee: { label: 'Empleado', className: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' },
       department_head: { label: 'Jefe Depto.', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300' },
       global_manager: { label: 'Gestor Global', className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300' },
+      superadmin: { label: 'Superadmin', className: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-300' },
     };
     return (
       <Badge className={variants[userRole].className}>
@@ -342,7 +350,7 @@ export default function UserManagement() {
     );
   };
 
-  if (role !== 'global_manager') {
+  if (role !== 'global_manager' && role !== 'superadmin') {
     return (
       <AppLayout>
         <div className="flex items-center justify-center h-64">
@@ -397,7 +405,7 @@ export default function UserManagement() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {users.filter(u => u.role === 'global_manager').length}
+                {users.filter(u => u.role === 'global_manager' || u.role === 'superadmin').length}
               </div>
             </CardContent>
           </Card>
@@ -410,7 +418,8 @@ export default function UserManagement() {
               <div>
                 <CardTitle>Usuarios del Sistema</CardTitle>
                 <CardDescription>
-                  Haz clic en un usuario para editar su rol y departamento
+                  Haz clic en un usuario para editar su rol y departamento.
+                  {role !== 'superadmin' ? ' Solo superadmin puede eliminar usuarios.' : ''}
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -438,6 +447,7 @@ export default function UserManagement() {
                     <SelectItem value="employee">Empleado</SelectItem>
                     <SelectItem value="department_head">Jefe de Depto.</SelectItem>
                     <SelectItem value="global_manager">Gestor Global</SelectItem>
+                    {role === 'superadmin' && <SelectItem value="superadmin">Superadmin</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
@@ -480,16 +490,18 @@ export default function UserManagement() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenDeleteDialog(user)}
-                            disabled={currentUser?.id === user.user_id}
-                            aria-label={`Eliminar ${user.full_name}`}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {canDeleteUsers && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleOpenDeleteDialog(user)}
+                              disabled={currentUser?.id === user.user_id}
+                              aria-label={`Eliminar ${user.full_name}`}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -548,6 +560,7 @@ export default function UserManagement() {
                       <SelectItem value="employee">Empleado</SelectItem>
                       <SelectItem value="department_head">Jefe de Departamento</SelectItem>
                       <SelectItem value="global_manager">Gestor Global</SelectItem>
+                    {role === 'superadmin' && <SelectItem value="superadmin">Superadmin</SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
@@ -674,6 +687,7 @@ export default function UserManagement() {
                     <SelectItem value="employee">Empleado</SelectItem>
                     <SelectItem value="department_head">Jefe de Departamento</SelectItem>
                     <SelectItem value="global_manager">Gestor Global</SelectItem>
+                    {role === 'superadmin' && <SelectItem value="superadmin">Superadmin</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
