@@ -109,3 +109,38 @@ Se generó una auditoría con hallazgos y plan de acción en:
 
 - `docs/usabilidad-calidad-reporte.md`
 - `docs/guia-remediacion-paso-a-paso.md`
+
+## Employee Mobile Mode (nuevo)
+
+Se añadió un modo móvil orientado a empleados con navegación inferior y auto-selección de interfaz.
+
+### Auto-switch de UI
+
+La app ahora decide entre dos shells:
+
+- **AdminShell**: sidebar tradicional (backoffice desktop).
+- **EmployeeShell**: navegación inferior mobile-first para empleados.
+
+Reglas:
+
+- Si el viewport es móvil (`< 768px`) y el rol **no es administrativo**, se usa `EmployeeShell`.
+- Si el rol es `department_head`, `global_manager` o `superadmin`, o si el viewport es desktop, se usa `AdminShell`.
+
+### Override para debugging
+
+Puedes forzar el shell desde query param en cualquier ruta protegida:
+
+- `?ui=employee`
+- `?ui=admin`
+
+Ejemplos:
+
+- `/attendance?ui=employee`
+- `/history?ui=admin`
+
+### Tabs móviles para empleado
+
+- `Marcar` → `/attendance`
+- `Mi semana` → `/history`
+- `Incidencias` → `/incidents`
+- `Perfil` → `/profile`
