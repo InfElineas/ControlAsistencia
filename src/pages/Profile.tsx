@@ -16,6 +16,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDepartments } from '@/hooks/useDepartments';
 import { toast } from 'sonner';
 import { mapGenericActionError } from '@/lib/error-messages';
+import { useUIMode } from '@/hooks/use-ui-mode';
+import { EmployeeProfilePage } from '@/pages/employee/EmployeeProfilePage';
 
 interface ProfileFormState {
   fullName: string;
@@ -25,7 +27,8 @@ interface ProfileFormState {
 }
 
 export default function Profile() {
-  const { profile, user, loading: authLoading, updateProfile } = useAuth();
+  const { profile, user, role, loading: authLoading, updateProfile } = useAuth();
+  const uiMode = useUIMode(role);
   const { departments, loading: departmentsLoading } = useDepartments();
 
   const [form, setForm] = useState<ProfileFormState>({
@@ -93,6 +96,14 @@ export default function Profile() {
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
+      </AppLayout>
+    );
+  }
+
+  if (uiMode === 'employee') {
+    return (
+      <AppLayout>
+        <EmployeeProfilePage />
       </AppLayout>
     );
   }
