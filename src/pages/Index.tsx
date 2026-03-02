@@ -12,6 +12,7 @@ import {
   TriangleAlert as AlertTriangleIcon,
   Users,
   XCircle,
+  TriangleAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -65,6 +66,12 @@ export default function Index() {
       navigate('/auth');
     }
   }, [authLoading, navigate, user]);
+
+  useEffect(() => {
+    if (!authLoading && user && uiMode === 'employee') {
+      navigate('/attendance', { replace: true });
+    }
+  }, [authLoading, navigate, uiMode, user]);
 
   useEffect(() => {
     if (!user?.id || isGlobalManager || currentSchedule) return;
@@ -308,7 +315,7 @@ export default function Index() {
           </Card>
         )}
 
-        {!isGlobalManager && todayMarks.length > 0 && (
+        {isGlobalManager && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Detalle de marcajes de hoy</CardTitle>
