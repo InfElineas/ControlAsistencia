@@ -4,11 +4,11 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   Bell,
-  Building2,
   Calendar,
   CheckCircle,
   Clock,
   Loader2,
+  Timer,
   TriangleAlert,
   Users,
   XCircle,
@@ -45,6 +45,7 @@ interface AdminDashboardStats {
   employees: number;
   departments: number;
   pendingIncidents: number;
+  todayMarks: number;
 }
 
 export default function Index() {
@@ -56,7 +57,9 @@ export default function Index() {
   const uiMode = useUIMode(role ?? null);
 
   const isGlobalManager = role === 'global_manager' || role === 'superadmin';
-  const isDepartmentHead = role === 'department_head';
+
+  const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
+  const [loadingAdminStats, setLoadingAdminStats] = useState(false);
 
   const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
   const [loadingAdminStats, setLoadingAdminStats] = useState(false);
@@ -98,20 +101,27 @@ export default function Index() {
 
     const fetchAdminStats = async () => {
       setLoadingAdminStats(true);
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
 
-      const [{ count: employees }, { count: departments }, incidentsResp] = await Promise.all([
+      const [{ count: employees }, { count: departments }, incidentsResp, marksResp] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('departments').select('id', { count: 'exact', head: true }),
         supabase
           .from('attendance_incidents')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'pending'),
+        supabase
+          .from('attendance_marks')
+          .select('id', { count: 'exact', head: true })
+          .gte('timestamp', todayStart.toISOString()),
       ]);
 
       setAdminStats({
         employees: employees ?? 0,
         departments: departments ?? 0,
         pendingIncidents: incidentsResp.count ?? 0,
+        todayMarks: marksResp.count ?? 0,
       });
 
       setLoadingAdminStats(false);
@@ -132,6 +142,13 @@ export default function Index() {
   const isRest = isRestDay(today);
   const hasMarkedIn = todayMarks.some((mark) => mark.mark_type === 'IN');
   const hasMarkedOut = todayMarks.some((mark) => mark.mark_type === 'OUT');
+
+  const inMarks = todayMarks
+    .filter((mark) => mark.mark_type === 'IN')
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const outMarks = todayMarks
+    .filter((mark) => mark.mark_type === 'OUT')
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   const attendanceStatus = useMemo(() => {
     if (isRest) {
@@ -170,7 +187,7 @@ export default function Index() {
   }, [hasMarkedIn, hasMarkedOut, isRest, lastMark]);
 
   const primaryActionLabel = isGlobalManager
-    ? 'Ver panel global'
+    ? 'Ir al panel global'
     : hasMarkedIn && !hasMarkedOut
       ? 'Registrar salida'
       : 'Registrar entrada';
@@ -194,7 +211,7 @@ export default function Index() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">Estado de hoy</CardTitle>
@@ -212,6 +229,28 @@ export default function Index() {
 
           <Card>
             <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Marcajes de hoy</CardTitle>
+            </CardHeader>
+            <CardContent className="flex items-center gap-3">
+              <Timer className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-2xl font-bold leading-none">{todayMarks.length}</p>
+                <p className="text-xs text-muted-foreground">registros</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground">Primera entrada</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xl font-semibold">{inMarks[0] ? format(new Date(inMarks[0].timestamp), 'HH:mm') : '--:--'}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">Notificaciones</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center gap-3">
@@ -222,20 +261,29 @@ export default function Index() {
               </div>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">Acción principal</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Button className="w-full" onClick={() => navigate(primaryActionRoute)}>
-                {primaryActionLabel}
-              </Button>
-            </CardContent>
-          </Card>
         </div>
 
-        {isGlobalManager ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Resumen del día</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl bg-secondary p-4">
+              <p className="text-xs text-muted-foreground">Última salida</p>
+              <p className="text-2xl font-bold">{outMarks[0] ? format(new Date(outMarks[0].timestamp), 'HH:mm') : '--:--'}</p>
+            </div>
+            <div className="rounded-xl bg-secondary p-4">
+              <p className="text-xs text-muted-foreground">Horario de descanso</p>
+              <p className="text-2xl font-bold">{isRest ? 'Sí' : 'No'}</p>
+            </div>
+            <div className="rounded-xl bg-secondary p-4">
+              <p className="text-xs text-muted-foreground">Incidencias pendientes</p>
+              <p className="text-2xl font-bold">{isGlobalManager ? adminStats?.pendingIncidents ?? 0 : 'Revisar en Incidencias'}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {isGlobalManager && (
           <Card>
             <CardHeader>
               <CardTitle>Resumen ejecutivo</CardTitle>
@@ -247,14 +295,18 @@ export default function Index() {
                   Cargando métricas...
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
                   <div className="rounded-xl bg-secondary p-4">
-                    <p className="text-xs text-muted-foreground">Trabajadores registrados</p>
+                    <p className="text-xs text-muted-foreground">Trabajadores</p>
                     <p className="text-2xl font-bold">{adminStats?.employees ?? 0}</p>
                   </div>
                   <div className="rounded-xl bg-secondary p-4">
-                    <p className="text-xs text-muted-foreground">Departamentos activos</p>
+                    <p className="text-xs text-muted-foreground">Departamentos</p>
                     <p className="text-2xl font-bold">{adminStats?.departments ?? 0}</p>
+                  </div>
+                  <div className="rounded-xl bg-secondary p-4">
+                    <p className="text-xs text-muted-foreground">Marcajes hoy</p>
+                    <p className="text-2xl font-bold">{adminStats?.todayMarks ?? 0}</p>
                   </div>
                   <div className="rounded-xl bg-secondary p-4">
                     <p className="text-xs text-muted-foreground">Incidencias pendientes</p>
@@ -264,75 +316,55 @@ export default function Index() {
               )}
             </CardContent>
           </Card>
-        ) : (
-          <>
-            {todayMarks.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Marcajes de hoy</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-3">
-                    {todayMarks.map((mark) => (
-                      <div key={mark.id} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary">
-                        <span className={cn('w-2 h-2 rounded-full', getMarkBadgeClass(mark.mark_type))} />
-                        <span className="font-medium">{getMarkLabel(mark.mark_type)}</span>
-                        <span className="text-muted-foreground">{format(new Date(mark.timestamp), 'HH:mm')}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Panel operativo</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-2">
-                <Button variant="outline" onClick={() => navigate('/incidents')}>
-                  {role === 'employee' ? 'Ver mis incidencias' : 'Gestionar incidencias'}
-                </Button>
-                <Button variant="outline" onClick={() => navigate('/rest-schedule')}>
-                  Gestionar descansos
-                </Button>
-                {!isGlobalManager && (
-                  <Button variant="outline" onClick={() => navigate('/vacations')}>
-                    Vacaciones
-                  </Button>
-                )}
-                {isDepartmentHead && (
-                  <Button variant="outline" onClick={() => navigate('/department')}>
-                    Ver departamento
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          </>
         )}
 
         {isGlobalManager && (
           <Card>
             <CardHeader>
-              <CardTitle>Atajos de gestión</CardTitle>
+              <CardTitle className="text-lg">Detalle de marcajes de hoy</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Button variant="outline" onClick={() => navigate('/users')}>
-                <Users className="h-4 w-4 mr-2" />
-                Usuarios
-              </Button>
-              <Button variant="outline" onClick={() => navigate('/departments-admin')}>
-                <Building2 className="h-4 w-4 mr-2" />
-                Departamentos
-              </Button>
-              <Button variant="outline" onClick={() => navigate('/configuration')}>
-                Configuración
-              </Button>
-              {role === 'superadmin' && (
-                <Button variant="outline" onClick={() => navigate('/superadmin')}>
-                  Consola superadmin
-                </Button>
-              )}
+            <CardContent>
+              <div className="flex flex-wrap gap-3">
+                {todayMarks.map((mark) => (
+                  <div key={mark.id} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary">
+                    <span className={cn('w-2 h-2 rounded-full', getMarkBadgeClass(mark.mark_type))} />
+                    <span className="font-medium">{getMarkLabel(mark.mark_type)}</span>
+                    <span className="text-muted-foreground">{format(new Date(mark.timestamp), 'HH:mm')}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Acción recomendada</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button className="w-full md:w-auto" onClick={() => navigate(primaryActionRoute)}>
+              {primaryActionLabel}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              El resto de módulos se gestionan desde el menú lateral para mantener esta pantalla centrada en métricas.
+            </p>
+          </CardContent>
+        </Card>
+
+        {isGlobalManager && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Alertas de gestión</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <TriangleAlert className="h-4 w-4 text-warning" />
+                Incidencias pendientes: <span className="font-semibold">{adminStats?.pendingIncidents ?? 0}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                Personal registrado: <span className="font-semibold">{adminStats?.employees ?? 0}</span>
+              </div>
             </CardContent>
           </Card>
         )}
