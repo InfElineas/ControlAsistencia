@@ -16,6 +16,9 @@ import {
   LogOut,
   Menu,
   X,
+  ChevronDown,
+  FolderKanban,
+  Briefcase,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth, AppRole } from '@/contexts/AuthContext';
@@ -30,6 +33,13 @@ interface NavItem {
   icon: React.ElementType;
   roles?: AppRole[];
   excludeRoles?: AppRole[];
+}
+
+interface NavGroup {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  items: NavItem[];
 }
 
 const navItems: NavItem[] = [
@@ -51,6 +61,10 @@ const navItems: NavItem[] = [
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    attendance: true,
+    management: true,
+  });
   const { profile, role, signOut } = useAuth();
   const { departments } = useDepartments();
   const location = useLocation();
@@ -67,9 +81,34 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return true;
   });
 
-  const NavLinks = () => (
-    <>
-      {filteredNavItems.map((item) => {
+  const groupedItems: NavGroup[] = [
+    {
+      key: 'attendance',
+      label: 'Asistencia',
+      icon: Briefcase,
+      items: filteredNavItems.filter((item) =>
+        ['/attendance', '/history', '/incidents', '/rest-schedule', '/vacations'].includes(item.href)
+      ),
+    },
+    {
+      key: 'management',
+      label: 'Gestión',
+      icon: FolderKanban,
+      items: filteredNavItems.filter((item) =>
+        ['/department', '/global', '/users', '/departments-admin', '/configuration', '/superadmin'].includes(item.href)
+      ),
+    },
+  ].filter((group) => group.items.length > 0);
+
+  const topLevelItems = filteredNavItems.filter((item) =>
+    ['/', '/profile', '/notifications'].includes(item.href)
+  );
+
+  const toggleGroup = (groupKey: string) => {
+    setOpenGroups((current) => ({ ...current, [groupKey]: !current[groupKey] }));
+  };
+
+  const NavLinkItem = ({ item }: { item: NavItem }) => {
         const isActive = location.pathname === item.href;
         return (
           <Link
@@ -86,6 +125,44 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <item.icon className="h-5 w-5 transition-transform group-hover:scale-105" />
             <span className="text-sm font-medium">{item.label}</span>
           </Link>
+        );
+  };
+
+  const NavLinks = () => (
+    <>
+      {topLevelItems.map((item) => (
+        <NavLinkItem key={item.href} item={item} />
+      ))}
+
+      {groupedItems.map((group) => {
+        const isExpanded = openGroups[group.key] ?? true;
+        const isGroupActive = group.items.some((item) => item.href === location.pathname);
+
+        return (
+          <div key={group.key} className="rounded-xl border border-border/70 bg-background/50">
+            <button
+              type="button"
+              onClick={() => toggleGroup(group.key)}
+              className={cn(
+                'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors',
+                isGroupActive ? 'text-primary' : 'text-foreground/90 hover:bg-secondary/40'
+              )}
+            >
+              <span className="inline-flex items-center gap-2">
+                <group.icon className="h-4 w-4" />
+                {group.label}
+              </span>
+              <ChevronDown className={cn('h-4 w-4 transition-transform', isExpanded && 'rotate-180')} />
+            </button>
+
+            {isExpanded && (
+              <div className="px-2 pb-2 space-y-1">
+                {group.items.map((item) => (
+                  <NavLinkItem key={item.href} item={item} />
+                ))}
+              </div>
+            )}
+          </div>
         );
       })}
     </>
@@ -116,14 +193,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <aside
         className={cn(
-          'lg:hidden fixed top-16 left-0 bottom-0 w-72 bg-card/95 backdrop-blur-md border-r z-50 transform transition-transform duration-200',
+          'lg:hidden fixed top-16 left-0 bottom-0 w-72 bg-card/95 backdrop-blur-md border-r z-50 transform transition-transform duration-200 flex flex-col overflow-hidden',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="p-4 space-y-2">
+        <div className="p-4 space-y-2 flex-1 overflow-y-auto">
           <NavLinks />
         </div>
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-card/70">
+        <div className="p-4 border-t bg-card/70 shrink-0">
           <div className="mb-3">
             <p className="font-medium text-sm">{profile?.full_name}</p>
             <p className="text-xs text-muted-foreground capitalize">{role?.replace('_', ' ')}</p>
@@ -136,7 +213,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-72 bg-card/95 backdrop-blur-md border-r">
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-72 bg-card/95 backdrop-blur-md border-r overflow-hidden">
         <div className="p-5 border-b bg-muted/30">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -154,10 +231,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <NotificationBell />
           </div>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           <NavLinks />
         </nav>
-        <div className="p-4 border-t bg-muted/20">
+        <div className="p-4 border-t bg-muted/20 shrink-0">
           <div className="mb-3">
             <p className="font-medium text-sm">{profile?.full_name}</p>
             <p className="text-xs text-muted-foreground capitalize">{role?.replace('_', ' ')}</p>
