@@ -9,46 +9,25 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-
-const INCIDENT_TYPES = ['olvidé marcar', 'tardanza', 'salida temprana', 'gps', 'geofence'] as const;
-
-type IncidentType = (typeof INCIDENT_TYPES)[number];
+import {
+  INCIDENT_TYPES,
+  IncidentStatus,
+  IncidentType,
+  buildIncidentErrorMessage,
+  formatIncidentStatus,
+  isSchemaNotReadyError,
+} from '@/lib/incidents';
 
 interface Incident {
   id: string;
   incident_type: IncidentType;
   requested_at: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: IncidentStatus;
   reason: string | null;
   manager_notes: string | null;
   reviewed_at: string | null;
-}
-
-interface DBErrorShape {
-  code?: string;
-  message?: string;
-  details?: string;
-  hint?: string;
-}
-
-function isSchemaNotReadyError(error: unknown): boolean {
-  const dbError = error as DBErrorShape | null;
-  if (!dbError) return false;
-  return dbError.code === '42P01' || dbError.message?.toLowerCase().includes('attendance_incidents') === true;
-}
-
-function buildErrorMessage(error: unknown): string {
-  const dbError = error as DBErrorShape | null;
-  if (!dbError) {
-    return 'No fue posible completar la operación.';
-  }
-
-  if (isSchemaNotReadyError(error)) {
-    return 'Falta actualizar la base de datos: ejecuta las migraciones para habilitar incidencias.';
-  }
-
-  return dbError.message || 'No fue posible completar la operación.';
 }
 
 export function EmployeeIncidentsPage() {
@@ -57,6 +36,7 @@ export function EmployeeIncidentsPage() {
   const [type, setType] = useState<IncidentType>('olvidé marcar');
   const [requestedAt, setRequestedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   const [reason, setReason] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | IncidentStatus>('all');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['incidents', user?.id],
@@ -75,13 +55,25 @@ export function EmployeeIncidentsPage() {
 
   const schemaNotReady = useMemo(() => isSchemaNotReadyError(error), [error]);
 
+  const filteredData = useMemo(
+    () => (statusFilter === 'all' ? data || [] : (data || []).filter((item) => item.status === statusFilter)),
+    [data, statusFilter]
+  );
+
+  const pendingCount = (data || []).filter((item) => item.status === 'pending').length;
+
   const mutation = useMutation({
     mutationFn: async () => {
+      const normalizedReason = reason.trim();
+      if ((type === 'olvidé marcar' || type === 'tardanza' || type === 'salida temprana') && !normalizedReason) {
+        throw new Error('Debes indicar un motivo para este tipo de incidencia.');
+      }
+
       const { error } = await supabase.from('attendance_incidents').insert({
         user_id: user!.id,
         incident_type: type,
         requested_at: new Date(requestedAt).toISOString(),
-        reason: reason || null,
+        reason: normalizedReason || null,
       });
       if (error) throw error;
     },
@@ -90,7 +82,7 @@ export function EmployeeIncidentsPage() {
       setReason('');
       queryClient.invalidateQueries({ queryKey: ['incidents', user?.id] });
     },
-    onError: (error) => toast.error(buildErrorMessage(error)),
+    onError: (error) => toast.error(buildIncidentErrorMessage(error)),
   });
 
   const onSubmit = (event: FormEvent) => {
@@ -105,7 +97,7 @@ export function EmployeeIncidentsPage() {
           <CardContent className="pt-6 text-sm">
             <p className="font-semibold text-warning">Incidencias requiere migración de base de datos</p>
             <p className="mt-1 text-muted-foreground">
-              Ejecuta las migraciones pendientes (incluida <code>20260228194000_add_attendance_incidents.sql</code>) y recarga esta pantalla.
+              Ejecuta las migraciones pendientes (incluidas <code>20260228194000_add_attendance_incidents.sql</code> y <code>20260228202000_add_incident_review_fields.sql</code>) y recarga esta pantalla.
             </p>
           </CardContent>
         </Card>
@@ -130,7 +122,13 @@ export function EmployeeIncidentsPage() {
               </SelectContent>
             </Select>
             <Input type="datetime-local" value={requestedAt} onChange={(e) => setRequestedAt(e.target.value)} required />
-            <Textarea placeholder="Motivo (opcional)" value={reason} onChange={(e) => setReason(e.target.value)} />
+            <Textarea
+              placeholder="Motivo"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              maxLength={300}
+            />
+            <p className="text-xs text-muted-foreground text-right">{reason.length}/300</p>
             <Button className="w-full" disabled={mutation.isPending || schemaNotReady}>
               {mutation.isPending ? 'Guardando...' : 'Nueva incidencia'}
             </Button>
@@ -142,22 +140,40 @@ export function EmployeeIncidentsPage() {
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-base">Mis incidencias</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
-              Recargar
-            </Button>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">Pendientes: {pendingCount}</Badge>
+              <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
+                Recargar
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | IncidentStatus)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Filtrar estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="pending">Pendientes</SelectItem>
+              <SelectItem value="approved">Aprobadas</SelectItem>
+              <SelectItem value="rejected">Rechazadas</SelectItem>
+            </SelectContent>
+          </Select>
+
           {isLoading && <Skeleton className="h-20 w-full" />}
-          {isError && <p className="text-sm text-destructive">{buildErrorMessage(error)}</p>}
-          {!isLoading && !isError && (data || []).length === 0 && (
-            <p className="text-sm text-muted-foreground">No tienes incidencias creadas todavía.</p>
+          {isError && <p className="text-sm text-destructive">{buildIncidentErrorMessage(error)}</p>}
+          {!isLoading && !isError && filteredData.length === 0 && (
+            <p className="text-sm text-muted-foreground">No tienes incidencias en este filtro.</p>
           )}
-          {(data || []).map((item) => (
+
+          {filteredData.map((item) => (
             <div key={item.id} className="rounded-xl border p-3 text-sm">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <p className="font-semibold capitalize">{item.incident_type}</p>
-                <p className="text-xs uppercase text-muted-foreground">{item.status}</p>
+                <Badge variant={item.status === 'approved' ? 'default' : item.status === 'rejected' ? 'destructive' : 'secondary'}>
+                  {formatIncidentStatus(item.status)}
+                </Badge>
               </div>
               <p className="text-muted-foreground">{format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm')}</p>
               {item.reason && <p className="mt-1">Motivo: {item.reason}</p>}

@@ -167,3 +167,20 @@ supabase db push
 - **Empleado**: crea y consulta sus incidencias en `/incidents`.
 - **Department Head / Global Manager / Superadmin**: revisan, aprueban o rechazan incidencias en la misma ruta `/incidents` (vista de gestión por rol).
 - La aprobación guarda estado (`approved/rejected`), notas del gestor y datos de revisión (`reviewed_by`, `reviewed_at`).
+
+### Optimización del sistema de incidencias
+
+Se mejoró el flujo de incidencias con foco en usabilidad y rendimiento:
+
+- Empleado:
+  - filtro por estado (todas/pendientes/aprobadas/rechazadas),
+  - contador de pendientes,
+  - validación de motivo para tipos críticos,
+  - etiquetas de estado legibles.
+- Gestores:
+  - búsqueda por empleado/correo/departamento/tipo,
+  - filtro por estado,
+  - orden con prioridad de pendientes,
+  - notas de revisión con límite para mantener consistencia.
+- Rendimiento de BD:
+  - índices sobre `attendance_incidents` para consultas por usuario, estado y fechas.
