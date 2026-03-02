@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Save, Clock, Building2 } from 'lucide-react';
+import { Loader2, Save, Clock, Building2, PauseCircle, PlayCircle } from 'lucide-react';
 
 interface Schedule {
   id: string;
@@ -43,6 +43,7 @@ const TIMEZONE_OPTIONS = [
 interface Props {
   departmentId: string;
   departmentName: string;
+  isPaused: boolean;
   schedule: Schedule | null;
   onSave: (departmentId: string, data: {
     checkin_start_time: string;
@@ -53,13 +54,15 @@ interface Props {
     allow_early_checkin?: boolean;
     allow_late_checkout?: boolean;
   }) => Promise<{ error: string | null }>;
+  onTogglePause: (departmentId: string, isPaused: boolean) => Promise<{ error: string | null }>;
 }
 
-export function DepartmentScheduleCard({ departmentId, departmentName, schedule, onSave }: Props) {
+export function DepartmentScheduleCard({ departmentId, departmentName, isPaused, schedule, onSave, onTogglePause }: Props) {
   const timezoneOptions = TIMEZONE_OPTIONS.some((tz) => tz.value === (schedule?.timezone || 'Europe/Madrid'))
     ? TIMEZONE_OPTIONS
     : [{ value: schedule?.timezone || 'Europe/Madrid', label: `${schedule?.timezone || 'Europe/Madrid'} (actual)` }, ...TIMEZONE_OPTIONS];
   const [saving, setSaving] = useState(false);
+  const [togglingPause, setTogglingPause] = useState(false);
   const [form, setForm] = useState({
     checkin_start_time: schedule?.checkin_start_time?.slice(0, 5) || '08:00',
     checkin_end_time: schedule?.checkin_end_time?.slice(0, 5) || '09:00',
@@ -98,6 +101,12 @@ export function DepartmentScheduleCard({ departmentId, departmentName, schedule,
     setSaving(false);
   };
 
+  const handleTogglePause = async () => {
+    setTogglingPause(true);
+    await onTogglePause(departmentId, !isPaused);
+    setTogglingPause(false);
+  };
+
   const hasChanges = schedule
     ? form.checkin_start_time !== schedule.checkin_start_time?.slice(0, 5) ||
       form.checkin_end_time !== schedule.checkin_end_time?.slice(0, 5) ||
@@ -109,19 +118,20 @@ export function DepartmentScheduleCard({ departmentId, departmentName, schedule,
     : true;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
+    <Card className="shadow-sm">
+      <CardHeader className="pb-2 pt-4">
+        <CardTitle className="text-sm flex items-center gap-2">
           <Building2 className="h-4 w-4 text-muted-foreground" />
           {departmentName}
+          {isPaused && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">Sin descanso</span>}
           {!schedule && (
             <span className="text-xs font-normal text-warning ml-auto">Sin configurar</span>
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
+      <CardContent className="space-y-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="space-y-1">
             <Label className="text-xs flex items-center gap-1">
               <Clock className="h-3 w-3" />
               Entrada desde
@@ -132,7 +142,7 @@ export function DepartmentScheduleCard({ departmentId, departmentName, schedule,
               onChange={(e) => setForm((p) => ({ ...p, checkin_start_time: e.target.value }))}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label className="text-xs flex items-center gap-1">
               <Clock className="h-3 w-3" />
               Entrada hasta
@@ -145,8 +155,8 @@ export function DepartmentScheduleCard({ departmentId, departmentName, schedule,
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="space-y-1">
             <Label className="text-xs">Salida desde</Label>
             <Input
               type="time"
@@ -154,7 +164,7 @@ export function DepartmentScheduleCard({ departmentId, departmentName, schedule,
               onChange={(e) => setForm((p) => ({ ...p, checkout_start_time: e.target.value }))}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label className="text-xs">Salida hasta</Label>
             <Input
               type="time"
@@ -164,7 +174,7 @@ export function DepartmentScheduleCard({ departmentId, departmentName, schedule,
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label className="text-xs">Zona horaria</Label>
           <Select
             value={form.timezone}
@@ -183,7 +193,7 @@ export function DepartmentScheduleCard({ departmentId, departmentName, schedule,
           </Select>
         </div>
 
-        <div className="flex flex-col gap-3 pt-2">
+        <div className="flex flex-col gap-2 pt-1">
           <div className="flex items-center justify-between">
             <Label className="text-xs text-muted-foreground">Permitir entrada anticipada</Label>
             <Switch
@@ -199,6 +209,32 @@ export function DepartmentScheduleCard({ departmentId, departmentName, schedule,
             />
           </div>
         </div>
+
+        <Button
+          type="button"
+          variant={isPaused ? 'outline' : 'secondary'}
+          onClick={handleTogglePause}
+          disabled={togglingPause}
+          size="sm"
+          className="w-full"
+        >
+          {togglingPause ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Actualizando...
+            </>
+          ) : isPaused ? (
+            <>
+              <PlayCircle className="h-4 w-4 mr-2" />
+              Activar descanso por departamento
+            </>
+          ) : (
+            <>
+              <PauseCircle className="h-4 w-4 mr-2" />
+              Modo sin descanso por departamento
+            </>
+          )}
+        </Button>
 
         <Button
           onClick={handleSave}
