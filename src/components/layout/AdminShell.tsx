@@ -20,7 +20,7 @@ import {
   FolderKanban,
   Briefcase,
 } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { useAuth, AppRole } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -63,6 +63,9 @@ const SidebarBrand = memo(function SidebarBrand() {
   );
 });
 
+const SIDEBAR_SCROLL_KEY = 'admin-shell-sidebar-scroll';
+const MOBILE_SIDEBAR_SCROLL_KEY = 'admin-shell-mobile-sidebar-scroll';
+
 const navItems: NavItem[] = [
   { href: '/', label: 'Inicio', icon: LayoutDashboard },
   { href: '/attendance', label: 'Marcar', icon: Clock, excludeRoles: ['global_manager', 'superadmin'] },
@@ -87,6 +90,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     management: true,
   });
   const { profile, role, signOut } = useAuth();
+  const desktopNavRef = useRef<HTMLElement | null>(null);
+  const mobileNavRef = useRef<HTMLDivElement | null>(null);
   const { departments } = useDepartments();
   const location = useLocation();
 
@@ -129,7 +134,40 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setOpenGroups((current) => ({ ...current, [groupKey]: !current[groupKey] }));
   };
 
-  const NavLinkItem = ({ item }: { item: NavItem }) => {
+
+  useEffect(() => {
+    const desktopSaved = window.sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
+    if (desktopSaved && desktopNavRef.current) {
+      desktopNavRef.current.scrollTop = Number(desktopSaved);
+    }
+
+    const mobileSaved = window.sessionStorage.getItem(MOBILE_SIDEBAR_SCROLL_KEY);
+    if (mobileSaved && mobileNavRef.current) {
+      mobileNavRef.current.scrollTop = Number(mobileSaved);
+    }
+  }, []);
+
+  useEffect(() => {
+    const desktop = desktopNavRef.current;
+    if (!desktop) return;
+
+    const onScroll = () => window.sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(desktop.scrollTop));
+    desktop.addEventListener('scroll', onScroll);
+
+    return () => desktop.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const mobile = mobileNavRef.current;
+    if (!mobile) return;
+
+    const onScroll = () => window.sessionStorage.setItem(MOBILE_SIDEBAR_SCROLL_KEY, String(mobile.scrollTop));
+    mobile.addEventListener('scroll', onScroll);
+
+    return () => mobile.removeEventListener('scroll', onScroll);
+  }, [mobileMenuOpen]);
+
+  const NavLinkItem = ({ item, nested = false }: { item: NavItem; nested?: boolean }) => {
         const isActive = location.pathname === item.href;
         return (
           <Link
@@ -137,10 +175,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             to={item.href}
             onClick={() => setMobileMenuOpen(false)}
             className={cn(
-              'group flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all duration-200',
+              'group flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200',
               isActive
-                ? 'border-primary/30 bg-primary text-primary-foreground shadow-sm'
-                : 'border-transparent text-muted-foreground hover:border-border hover:bg-secondary/60 hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : nested
+                  ? 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
             )}
           >
             <item.icon className="h-5 w-5 transition-transform group-hover:scale-105" />
@@ -160,12 +200,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         const isGroupActive = group.items.some((item) => item.href === location.pathname);
 
         return (
-          <div key={group.key} className="rounded-xl border border-border/70 bg-background/50">
+          <div key={group.key} className="rounded-xl bg-transparent">
             <button
               type="button"
               onClick={() => toggleGroup(group.key)}
               className={cn(
-                'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors',
+                'w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors border-none',
                 isGroupActive ? 'text-primary' : 'text-foreground/90 hover:bg-secondary/40'
               )}
             >
@@ -179,7 +219,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             {isExpanded && (
               <div className="px-2 pb-2 space-y-1">
                 {group.items.map((item) => (
-                  <NavLinkItem key={item.href} item={item} />
+                  <NavLinkItem key={item.href} item={item} nested />
                 ))}
               </div>
             )}
@@ -218,7 +258,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
-        <div className="p-4 space-y-2 flex-1 overflow-y-auto">
+        <div ref={mobileNavRef} className="p-4 space-y-2 flex-1 overflow-y-auto">
           <NavLinks />
         </div>
         <div className="p-4 border-t bg-card/70 shrink-0">
@@ -238,7 +278,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <div className="p-5 border-b bg-muted/30">
           <SidebarBrand />
         </div>
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <nav ref={desktopNavRef} className="flex-1 p-4 space-y-2 overflow-y-auto">
           <NavLinks />
         </nav>
         <div className="p-4 border-t bg-muted/20 shrink-0">
