@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -147,7 +147,7 @@ export default function Index() {
     .filter((mark) => mark.mark_type === 'OUT')
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  const attendanceStatus = useMemo(() => {
+  const attendanceStatus = (() => {
     if (isRest) {
       return {
         title: 'Día de descanso',
@@ -181,7 +181,7 @@ export default function Index() {
       icon: CheckCircle,
       tone: 'text-success',
     };
-  }, [hasMarkedIn, hasMarkedOut, isRest, lastMark]);
+  })();
 
   const primaryActionLabel = isGlobalManager
     ? 'Ir al panel global'

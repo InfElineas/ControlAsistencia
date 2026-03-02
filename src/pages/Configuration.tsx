@@ -228,47 +228,6 @@ export default function Configuration() {
     toast.success('Ubicación eliminada.');
   };
 
-
-  useEffect(() => {
-    const fetchWorkLocations = async () => {
-      const { data } = await supabase
-        .from('work_locations')
-        .select('*')
-        .order('name', { ascending: true });
-
-      setWorkLocations((data || []) as Array<{ id: string; name: string; center_lat: number; center_lng: number; radius_meters: number; accuracy_threshold: number; block_on_poor_accuracy: boolean; is_active: boolean }>);
-    };
-
-    fetchWorkLocations();
-  }, []);
-
-  const handleCreateWorkLocation = async () => {
-    if (!newLocation.name.trim()) {
-      toast.error('Debes indicar un nombre para la ubicación.');
-      return;
-    }
-
-    const { error } = await supabase.from('work_locations').insert({
-      name: newLocation.name.trim(),
-      center_lat: newLocation.center_lat,
-      center_lng: newLocation.center_lng,
-      radius_meters: newLocation.radius_meters,
-      accuracy_threshold: newLocation.accuracy_threshold,
-      block_on_poor_accuracy: newLocation.block_on_poor_accuracy,
-      is_active: true,
-    });
-
-    if (error) {
-      toast.error(mapGenericActionError(error, 'No se pudo crear la ubicación de trabajo.'));
-      return;
-    }
-
-    const { data } = await supabase.from('work_locations').select('*').order('name', { ascending: true });
-    setWorkLocations((data || []) as Array<{ id: string; name: string; center_lat: number; center_lng: number; radius_meters: number; accuracy_threshold: number; block_on_poor_accuracy: boolean; is_active: boolean }>);
-    setNewLocation({ name: '', center_lat: 40.416775, center_lng: -3.70379, radius_meters: 100, accuracy_threshold: 50, block_on_poor_accuracy: true });
-    toast.success('Ubicación creada correctamente.');
-  };
-
   const handleSaveGeneral = async () => {
     setSavingGeneral(true);
 
