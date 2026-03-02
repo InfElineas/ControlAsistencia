@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -17,8 +18,10 @@ import UserManagement from "./pages/UserManagement";
 import DepartmentsManagement from "./pages/DepartmentsManagement";
 import Vacations from "./pages/Vacations";
 import Profile from "./pages/Profile";
+import Incidents from "./pages/Incidents";
 import SuperAdmin from "./pages/SuperAdmin";
 import NotFound from "./pages/NotFound";
+import NotificationsPage from "./pages/Notifications";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +31,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <NotificationsProvider>
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
@@ -120,6 +124,22 @@ const App = () => (
               }
             />
             <Route
+              path="/incidents"
+              element={
+                <ProtectedRoute>
+                  <Incidents />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                <ProtectedRoute>
+                  <NotificationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/profile"
               element={
                 <ProtectedRoute>
@@ -130,6 +150,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+        </NotificationsProvider>
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
