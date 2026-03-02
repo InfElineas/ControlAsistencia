@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Loader2, Clock, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
+import { useUIMode } from '@/hooks/use-ui-mode';
+import { EmployeeWeekPage } from '@/pages/employee/EmployeeWeekPage';
 import { es } from 'date-fns/locale';
 
 interface AttendanceRecord {
@@ -18,7 +20,8 @@ interface AttendanceRecord {
 }
 
 export default function History() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
+  const uiMode = useUIMode(role);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +98,14 @@ export default function History() {
 
     return `${hours}h ${minutes}m`;
   };
+
+  if (uiMode === 'employee') {
+    return (
+      <AppLayout>
+        <EmployeeWeekPage />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

@@ -46,6 +46,7 @@ export default function Attendance() {
     markAttendance,
   } = useAttendance();
 
+  const uiMode = useUIMode(role);
   const [marking, setMarking] = useState(false);
   const [geofenceResult, setGeofenceResult] = useState<{
     isInside: boolean;
@@ -223,6 +224,14 @@ export default function Attendance() {
   }, [canMarkOut, geofenceResult?.isInside]);
 
   const isLoading = configLoading || gmLoading || scheduleLoading;
+
+  if (uiMode === 'employee') {
+    return (
+      <AppLayout>
+        <EmployeeMarkPage />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
