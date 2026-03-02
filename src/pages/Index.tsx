@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useRestSchedule } from '@/hooks/useRestSchedule';
+import { useUIMode } from '@/hooks/use-ui-mode';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -52,6 +53,7 @@ export default function Index() {
   const { todayMarks, lastMark } = useAttendance();
   const { isRestDay, currentSchedule } = useRestSchedule();
   const { unreadCount } = useNotifications();
+  const uiMode = useUIMode(role ?? null);
 
   const isGlobalManager = role === 'global_manager' || role === 'superadmin';
   const isDepartmentHead = role === 'department_head';
@@ -183,7 +185,7 @@ export default function Index() {
             <div className="text-white">
               <p className="text-white/80">{getGreeting(today)}</p>
               <h1 className="text-2xl font-bold mt-1">{profile?.full_name}</h1>
-              <p className="text-white/70 text-sm mt-1 capitalize">{role?.replace('_', ' ')}</p>
+              <p className="text-white/70 text-sm mt-1 capitalize">{role?.replace('_', ' ')} · modo {uiMode}</p>
             </div>
             <div className="mt-4 flex items-center gap-2 text-white/80 text-sm">
               <Calendar className="h-4 w-4" />
