@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, MapPin, Clock, Settings, Save, FileSpreadsheet, Upload } from 'lucide-react';
+import { Loader2, MapPin, Clock, Settings, Save, FileSpreadsheet, Upload, PlusCircle, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapGenericActionError } from '@/lib/error-messages';
 import * as XLSX from 'xlsx';
@@ -21,9 +21,20 @@ type AttendanceImportSummary = {
   missing_emails: string[];
 };
 
+type WorkLocation = {
+  id: string;
+  name: string;
+  center_lat: number;
+  center_lng: number;
+  radius_meters: number;
+  accuracy_threshold: number;
+  block_on_poor_accuracy: boolean;
+  is_active: boolean;
+};
+
 export default function Configuration() {
   const { config, loading, updateConfig } = useGeofenceConfig();
-  const { departmentsWithSchedules, loading: schedulesLoading, updateSchedule } = useDepartmentSchedules();
+  const { departmentsWithSchedules, loading: schedulesLoading, updateSchedule, updateDepartmentPause } = useDepartmentSchedules();
   
   const [geofenceForm, setGeofenceForm] = useState({
     center_lat: config?.center_lat || 40.416775,
@@ -41,8 +52,10 @@ export default function Configuration() {
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [importingHistory, setImportingHistory] = useState(false);
   const [importSummary, setImportSummary] = useState<AttendanceImportSummary | null>(null);
-  const [workLocations, setWorkLocations] = useState<Array<{ id: string; name: string; center_lat: number; center_lng: number; radius_meters: number; accuracy_threshold: number; block_on_poor_accuracy: boolean; is_active: boolean }>>([]);
+  const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
   const [newLocation, setNewLocation] = useState({ name: '', center_lat: 40.416775, center_lng: -3.70379, radius_meters: 100, accuracy_threshold: 50, block_on_poor_accuracy: true });
+  const [editingLocation, setEditingLocation] = useState<WorkLocation | null>(null);
+  const [savingLocation, setSavingLocation] = useState(false);
 
   // Update form when config loads
   useEffect(() => {
@@ -108,6 +121,112 @@ export default function Configuration() {
     return { error };
   };
 
+  const handleToggleDepartmentPause = async (departmentId: string, isPaused: boolean) => {
+    const { error } = await updateDepartmentPause(departmentId, isPaused);
+    if (error) {
+      toast.error(mapGenericActionError(error, 'No se pudo actualizar el estado del departamento.'));
+    } else {
+      toast.success(isPaused ? 'Departamento en modo sin descanso.' : 'Descanso por departamento activado.');
+    }
+    return { error };
+  };
+
+  const fetchWorkLocations = async () => {
+    const { data, error } = await supabase
+      .from('work_locations')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) {
+      toast.error(mapGenericActionError(error, 'No se pudieron cargar las ubicaciones de trabajo.'));
+      return;
+    }
+
+    setWorkLocations((data || []) as WorkLocation[]);
+  };
+
+  useEffect(() => {
+    fetchWorkLocations();
+  }, []);
+
+  const handleCreateWorkLocation = async () => {
+    if (!newLocation.name.trim()) {
+      toast.error('Debes indicar un nombre para la ubicación.');
+      return;
+    }
+
+    setSavingLocation(true);
+    const { error } = await supabase.from('work_locations').insert({
+      name: newLocation.name.trim(),
+      center_lat: newLocation.center_lat,
+      center_lng: newLocation.center_lng,
+      radius_meters: newLocation.radius_meters,
+      accuracy_threshold: newLocation.accuracy_threshold,
+      block_on_poor_accuracy: newLocation.block_on_poor_accuracy,
+      is_active: true,
+    });
+
+    if (error) {
+      setSavingLocation(false);
+      toast.error(mapGenericActionError(error, 'No se pudo crear la ubicación de trabajo.'));
+      return;
+    }
+
+    await fetchWorkLocations();
+    setNewLocation({ name: '', center_lat: 40.416775, center_lng: -3.70379, radius_meters: 100, accuracy_threshold: 50, block_on_poor_accuracy: true });
+    setSavingLocation(false);
+    toast.success('Ubicación creada correctamente.');
+  };
+
+  const handleUpdateWorkLocation = async () => {
+    if (!editingLocation) return;
+
+    if (!editingLocation.name.trim()) {
+      toast.error('Debes indicar un nombre para la ubicación.');
+      return;
+    }
+
+    setSavingLocation(true);
+    const { error } = await supabase
+      .from('work_locations')
+      .update({
+        name: editingLocation.name.trim(),
+        center_lat: editingLocation.center_lat,
+        center_lng: editingLocation.center_lng,
+        radius_meters: editingLocation.radius_meters,
+        accuracy_threshold: editingLocation.accuracy_threshold,
+        block_on_poor_accuracy: editingLocation.block_on_poor_accuracy,
+        is_active: editingLocation.is_active,
+      })
+      .eq('id', editingLocation.id);
+
+    if (error) {
+      setSavingLocation(false);
+      toast.error(mapGenericActionError(error, 'No se pudo actualizar la ubicación.'));
+      return;
+    }
+
+    await fetchWorkLocations();
+    setSavingLocation(false);
+    setEditingLocation(null);
+    toast.success('Ubicación actualizada.');
+  };
+
+  const handleDeleteWorkLocation = async (locationId: string) => {
+    const { error } = await supabase.from('work_locations').delete().eq('id', locationId);
+
+    if (error) {
+      toast.error(mapGenericActionError(error, 'No se pudo eliminar la ubicación.'));
+      return;
+    }
+
+    if (editingLocation?.id === locationId) {
+      setEditingLocation(null);
+    }
+
+    await fetchWorkLocations();
+    toast.success('Ubicación eliminada.');
+  };
 
 
   useEffect(() => {
@@ -327,14 +446,16 @@ export default function Configuration() {
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                   {departmentsWithSchedules.map((dept) => (
                     <DepartmentScheduleCard
                       key={dept.id}
                       departmentId={dept.id}
                       departmentName={dept.name}
+                      isPaused={dept.is_paused}
                       schedule={dept.schedule}
                       onSave={handleSaveSchedule}
+                      onTogglePause={handleToggleDepartmentPause}
                     />
                   ))}
                 </div>
@@ -447,49 +568,113 @@ export default function Configuration() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base">Ubicaciones de trabajo</CardTitle>
-                    <CardDescription>Configura múltiples ubicaciones para que el empleado seleccione al iniciar sesión.</CardDescription>
+                    <CardDescription>Administra sedes activas e inactivas, crea nuevas ubicaciones y edita las existentes.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       {workLocations.map((location) => (
                         <div key={location.id} className="rounded-lg border p-3 text-sm">
-                          <p className="font-semibold">{location.name}</p>
-                          <p className="text-muted-foreground">Lat {location.center_lat} · Lng {location.center_lng} · Radio {location.radius_meters}m</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <p className="font-semibold">{location.name}</p>
+                              <p className="text-xs text-muted-foreground">{location.is_active ? 'Activa' : 'Inactiva'} · Radio {location.radius_meters}m · Precisión {location.accuracy_threshold}m</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button size="icon" variant="ghost" onClick={() => setEditingLocation(location)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="text-destructive" onClick={() => handleDeleteWorkLocation(location.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">Lat {location.center_lat} · Lng {location.center_lng}</p>
                         </div>
                       ))}
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Input
-                        placeholder="Nombre de ubicación"
-                        value={newLocation.name}
-                        onChange={(e) => setNewLocation((p) => ({ ...p, name: e.target.value }))}
-                      />
-                      <Input
-                        type="number"
-                        step="0.000001"
-                        placeholder="Latitud"
-                        value={newLocation.center_lat}
-                        onChange={(e) => setNewLocation((p) => ({ ...p, center_lat: parseFloat(e.target.value) }))}
-                      />
-                      <Input
-                        type="number"
-                        step="0.000001"
-                        placeholder="Longitud"
-                        value={newLocation.center_lng}
-                        onChange={(e) => setNewLocation((p) => ({ ...p, center_lng: parseFloat(e.target.value) }))}
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Radio (m)"
-                        value={newLocation.radius_meters}
-                        onChange={(e) => setNewLocation((p) => ({ ...p, radius_meters: parseInt(e.target.value) }))}
-                      />
+                    <div className="rounded-lg border border-dashed p-3 space-y-3">
+                      <p className="text-sm font-medium flex items-center gap-2">
+                        <PlusCircle className="h-4 w-4" />
+                        {editingLocation ? 'Editar ubicación seleccionada' : 'Crear nueva ubicación'}
+                      </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Input
+                          placeholder="Nombre de ubicación"
+                          value={editingLocation ? editingLocation.name : newLocation.name}
+                          onChange={(e) =>
+                            editingLocation
+                              ? setEditingLocation((prev) => (prev ? { ...prev, name: e.target.value } : prev))
+                              : setNewLocation((p) => ({ ...p, name: e.target.value }))
+                          }
+                        />
+                        <Input
+                          type="number"
+                          step="0.000001"
+                          placeholder="Latitud"
+                          value={editingLocation ? editingLocation.center_lat : newLocation.center_lat}
+                          onChange={(e) =>
+                            editingLocation
+                              ? setEditingLocation((prev) => (prev ? { ...prev, center_lat: parseFloat(e.target.value) } : prev))
+                              : setNewLocation((p) => ({ ...p, center_lat: parseFloat(e.target.value) }))
+                          }
+                        />
+                        <Input
+                          type="number"
+                          step="0.000001"
+                          placeholder="Longitud"
+                          value={editingLocation ? editingLocation.center_lng : newLocation.center_lng}
+                          onChange={(e) =>
+                            editingLocation
+                              ? setEditingLocation((prev) => (prev ? { ...prev, center_lng: parseFloat(e.target.value) } : prev))
+                              : setNewLocation((p) => ({ ...p, center_lng: parseFloat(e.target.value) }))
+                          }
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Radio (m)"
+                          value={editingLocation ? editingLocation.radius_meters : newLocation.radius_meters}
+                          onChange={(e) =>
+                            editingLocation
+                              ? setEditingLocation((prev) => (prev ? { ...prev, radius_meters: parseInt(e.target.value, 10) } : prev))
+                              : setNewLocation((p) => ({ ...p, radius_meters: parseInt(e.target.value, 10) }))
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center justify-between rounded-md bg-secondary/40 px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium">Ubicación activa</p>
+                          <p className="text-xs text-muted-foreground">Solo las activas aparecen al iniciar sesión.</p>
+                        </div>
+                        <Switch
+                          checked={editingLocation ? editingLocation.is_active : true}
+                          onCheckedChange={(checked) =>
+                            editingLocation
+                              ? setEditingLocation((prev) => (prev ? { ...prev, is_active: checked } : prev))
+                              : null
+                          }
+                          disabled={!editingLocation}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        {editingLocation ? (
+                          <>
+                            <Button variant="outline" className="w-full" onClick={() => setEditingLocation(null)}>
+                              Cancelar edición
+                            </Button>
+                            <Button className="w-full" onClick={handleUpdateWorkLocation} disabled={savingLocation}>
+                              {savingLocation ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Pencil className="h-4 w-4 mr-2" />}
+                              Guardar cambios
+                            </Button>
+                          </>
+                        ) : (
+                          <Button variant="outline" className="w-full" onClick={handleCreateWorkLocation} disabled={savingLocation}>
+                            {savingLocation ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <PlusCircle className="h-4 w-4 mr-2" />}
+                            Crear ubicación
+                          </Button>
+                        )}
+                      </div>
                     </div>
-
-                    <Button variant="outline" className="w-full" onClick={handleCreateWorkLocation}>
-                      Crear ubicación
-                    </Button>
                   </CardContent>
                 </Card>
 

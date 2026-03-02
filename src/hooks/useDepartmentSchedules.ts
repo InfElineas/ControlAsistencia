@@ -17,6 +17,7 @@ interface DepartmentSchedule {
 interface DepartmentWithSchedule {
   id: string;
   name: string;
+  is_paused: boolean;
   schedule: DepartmentSchedule | null;
 }
 
@@ -48,6 +49,7 @@ export function useDepartmentSchedules() {
       const combined = (departments || []).map((dept) => ({
         id: dept.id,
         name: dept.name,
+        is_paused: dept.is_paused ?? false,
         schedule: schedules?.find((s) => s.department_id === dept.id) || null,
       }));
 
@@ -109,11 +111,31 @@ export function useDepartmentSchedules() {
     }
   };
 
+  const updateDepartmentPause = async (departmentId: string, isPaused: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('departments')
+        .update({
+          is_paused: isPaused,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', departmentId);
+
+      if (error) throw error;
+
+      await fetchSchedules();
+      return { error: null };
+    } catch (err: unknown) {
+      return { error: getErrorMessage(err) };
+    }
+  };
+
   return {
     departmentsWithSchedules,
     loading,
     error,
     updateSchedule,
+    updateDepartmentPause,
     refetch: fetchSchedules,
   };
 }
