@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useGeofenceConfig } from '@/hooks/useGeofenceConfig';
@@ -26,6 +26,7 @@ export default function Attendance() {
     schedule,
     isWithinCheckinWindow,
     getCurrentTimeLabel,
+    hasReachedCheckoutTime,
     loading: scheduleLoading,
   } = useDepartmentSchedule();
   const {
@@ -53,6 +54,10 @@ export default function Attendance() {
     accuracyOk: boolean;
   } | null>(null);
 
+  const autoMarkingRef = useRef(false);
+  const lastAutoReasonRef = useRef<string | null>(null);
+  const previousInsideRef = useRef<boolean | null>(null);
+
   // Check geofence when location updates
   useEffect(() => {
     if (config && latitude && longitude) {
@@ -77,6 +82,47 @@ export default function Attendance() {
   
   const canMarkInAction = !isGlobalManager && !isRest && Boolean(geofenceResult?.isInside) && canMarkIn;
   const canMarkOutAction = !isGlobalManager && !isRest && canMarkOut;
+
+  const autoMarkOut = useCallback(async (reason: 'SCHEDULE' | 'GEOFENCE_EXIT') => {
+    if (isGlobalManager || isRest || !canMarkOut || autoMarkingRef.current) return;
+
+    autoMarkingRef.current = true;
+    setMarking(true);
+
+    const { error, message } = await markAttendance('OUT', {
+      latitude,
+      longitude,
+      accuracy,
+      distanceToCenter: geofenceResult?.distance ?? null,
+      insideGeofence: geofenceResult?.isInside ?? false,
+    });
+
+    if (error) {
+      toast.error(mapAttendanceError(error));
+      lastAutoReasonRef.current = null;
+    } else {
+      lastAutoReasonRef.current = reason;
+      toast.success(
+        message ||
+          (reason === 'SCHEDULE'
+            ? 'Salida registrada automáticamente por horario de salida'
+            : 'Salida registrada automáticamente por salida de geofence')
+      );
+    }
+
+    setMarking(false);
+    autoMarkingRef.current = false;
+  }, [
+    isGlobalManager,
+    isRest,
+    canMarkOut,
+    markAttendance,
+    latitude,
+    longitude,
+    accuracy,
+    geofenceResult?.distance,
+    geofenceResult?.isInside,
+  ]);
 
   const handleMark = async (type: 'IN' | 'OUT') => {
     if (isGlobalManager) {
@@ -110,6 +156,59 @@ export default function Attendance() {
     }
     setMarking(false);
   };
+
+  useEffect(() => {
+    if (isGlobalManager || isRest || !canMarkOut) {
+      previousInsideRef.current = geofenceResult?.isInside ?? null;
+      return;
+    }
+
+    const previousInside = previousInsideRef.current;
+    const currentInside = geofenceResult?.isInside ?? null;
+
+    if (
+      previousInside === true &&
+      currentInside === false &&
+      lastAutoReasonRef.current !== 'GEOFENCE_EXIT'
+    ) {
+      void autoMarkOut('GEOFENCE_EXIT');
+    }
+
+    previousInsideRef.current = currentInside;
+  }, [autoMarkOut, canMarkOut, geofenceResult?.isInside, isGlobalManager, isRest]);
+
+  useEffect(() => {
+    if (isGlobalManager || isRest || !canMarkOut) return;
+
+    if (hasReachedCheckoutTime() && lastAutoReasonRef.current !== 'SCHEDULE') {
+      void autoMarkOut('SCHEDULE');
+    }
+
+    const interval = window.setInterval(() => {
+      if (hasReachedCheckoutTime() && !autoMarkingRef.current && lastAutoReasonRef.current !== 'SCHEDULE') {
+        void autoMarkOut('SCHEDULE');
+      }
+    }, 60_000);
+
+    return () => window.clearInterval(interval);
+  }, [autoMarkOut, canMarkOut, isGlobalManager, isRest, schedule?.checkout_start_time, schedule?.timezone]);
+
+  useEffect(() => {
+    if (isGlobalManager || isRest || !canMarkOut) return;
+
+    const interval = window.setInterval(() => {
+      getCurrentPosition();
+    }, 60_000);
+
+    return () => window.clearInterval(interval);
+  }, [canMarkOut, getCurrentPosition, isGlobalManager, isRest]);
+
+  useEffect(() => {
+    if (!canMarkOut) {
+      lastAutoReasonRef.current = null;
+      previousInsideRef.current = geofenceResult?.isInside ?? null;
+    }
+  }, [canMarkOut, geofenceResult?.isInside]);
 
   const isLoading = configLoading || gmLoading || scheduleLoading;
 
