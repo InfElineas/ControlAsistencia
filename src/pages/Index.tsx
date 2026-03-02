@@ -12,6 +12,7 @@ import {
   TriangleAlert,
   Users,
   XCircle,
+  TriangleAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -63,6 +64,12 @@ export default function Index() {
       navigate('/auth');
     }
   }, [authLoading, navigate, user]);
+
+  useEffect(() => {
+    if (!authLoading && user && uiMode === 'employee') {
+      navigate('/attendance', { replace: true });
+    }
+  }, [authLoading, navigate, uiMode, user]);
 
   useEffect(() => {
     if (!user?.id || isGlobalManager || currentSchedule) return;
