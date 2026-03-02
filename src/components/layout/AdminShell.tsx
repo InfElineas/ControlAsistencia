@@ -20,7 +20,7 @@ import {
   FolderKanban,
   Briefcase,
 } from 'lucide-react';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { useAuth, AppRole } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,27 @@ interface NavGroup {
   icon: React.ElementType;
   items: NavItem[];
 }
+
+
+const SidebarBrand = memo(function SidebarBrand() {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <img
+          src="/logo-control-asistencia.svg"
+          alt="Control de Asistencia ELINEAS"
+          className="h-12 w-12 rounded-lg object-cover shadow-sm"
+        />
+        <div className="min-w-0">
+          <h1 className="font-bold text-base leading-tight">Control de Asistencia</h1>
+          <p className="text-base leading-tight font-semibold text-primary">ELINEAS</p>
+          <p className="text-xs text-muted-foreground">Plataforma de gestión de asistencia</p>
+        </div>
+      </div>
+      <NotificationBell />
+    </div>
+  );
+});
 
 const navItems: NavItem[] = [
   { href: '/', label: 'Inicio', icon: LayoutDashboard },
@@ -215,21 +236,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-72 bg-card/95 backdrop-blur-md border-r overflow-hidden">
         <div className="p-5 border-b bg-muted/30">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <img
-                src="/logo-control-asistencia.svg"
-                alt="Control de Asistencia ELINEAS"
-                className="h-12 w-12 rounded-lg object-cover shadow-sm"
-              />
-              <div className="min-w-0">
-                <h1 className="font-bold text-base leading-tight">Control de Asistencia</h1>
-                <p className="text-base leading-tight font-semibold text-primary">ELINEAS</p>
-                <p className="text-xs text-muted-foreground">Plataforma de gestión de asistencia</p>
-              </div>
-            </div>
-            <NotificationBell />
-          </div>
+          <SidebarBrand />
         </div>
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           <NavLinks />

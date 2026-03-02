@@ -27,7 +27,6 @@ export function WorkLocationSelector() {
   const onConfirm = () => {
     if (!selected) return;
     setActiveLocation(selected);
-    window.location.reload();
   };
 
   return (
