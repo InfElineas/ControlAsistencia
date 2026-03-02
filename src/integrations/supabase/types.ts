@@ -310,6 +310,45 @@ export type Database = {
         }
         Relationships: []
       }
+      work_locations: {
+        Row: {
+          accuracy_threshold: number
+          block_on_poor_accuracy: boolean
+          center_lat: number
+          center_lng: number
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          radius_meters: number
+          updated_at: string
+        }
+        Insert: {
+          accuracy_threshold?: number
+          block_on_poor_accuracy?: boolean
+          center_lat: number
+          center_lng: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          radius_meters?: number
+          updated_at?: string
+        }
+        Update: {
+          accuracy_threshold?: number
+          block_on_poor_accuracy?: boolean
+          center_lat?: number
+          center_lng?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          radius_meters?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       geofence_config: {
         Row: {
           accuracy_threshold: number

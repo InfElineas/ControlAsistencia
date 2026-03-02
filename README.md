@@ -184,3 +184,15 @@ Se mejoró el flujo de incidencias con foco en usabilidad y rendimiento:
   - notas de revisión con límite para mantener consistencia.
 - Rendimiento de BD:
   - índices sobre `attendance_incidents` para consultas por usuario, estado y fechas.
+
+### Múltiples ubicaciones de trabajo
+
+Ahora se pueden configurar múltiples ubicaciones (geofence) en **Configuración → Geofence → Ubicaciones de trabajo**.
+
+Flujo:
+- Gestor/superadmin crea nuevas ubicaciones (nombre + coordenadas + radio).
+- Cuando el empleado inicia sesión y tiene más de una ubicación disponible, el sistema le solicita seleccionar dónde trabajará.
+- La validación de geofence en marcaje usa la ubicación seleccionada para esa sesión/dispositivo.
+
+Migración requerida:
+- `supabase/migrations/20260302161000_add_work_locations.sql`
