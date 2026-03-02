@@ -209,29 +209,49 @@ export default function GlobalPanel() {
 
       const summaries: AttendanceSummary[] = [];
       const todayDate = format(today, 'yyyy-MM-dd');
+      const employeeIds = filteredEmployees.map((emp) => emp.user_id);
 
-      const { data: absenceReviews } = await supabase
-        .from('attendance_absence_reviews')
-        .select('user_id, is_justified, notes')
-        .eq('date', todayDate)
-        .in('user_id', filteredEmployees.map((emp) => emp.user_id));
+      const [{ data: absenceReviews }, { data: allTodayMarks }] = await Promise.all([
+        supabase
+          .from('attendance_absence_reviews')
+          .select('user_id, is_justified, notes')
+          .eq('date', todayDate)
+          .in('user_id', employeeIds),
+        supabase
+          .from('attendance_marks')
+          .select('*')
+          .gte('timestamp', today.toISOString())
+          .in('user_id', employeeIds)
+          .order('timestamp', { ascending: true }),
+      ]);
 
       const reviewMap = new Map(
         (absenceReviews || []).map((review) => [review.user_id, { is_justified: review.is_justified, notes: review.notes }])
       );
 
+      const marksByUser = new Map<string, Array<{
+        mark_type: string;
+        timestamp: string;
+        inside_geofence: boolean | null;
+        distance_to_center: number | null;
+      }>>();
+
+      (allTodayMarks || []).forEach((mark) => {
+        const existing = marksByUser.get(mark.user_id) || [];
+        existing.push(mark);
+        marksByUser.set(mark.user_id, existing);
+      });
+
+      const scheduleMap = new Map(
+        (schedulesData || []).map((item) => [item.department_id, item])
+      );
+
       for (const emp of filteredEmployees) {
-        const { data: marks } = await supabase
-          .from('attendance_marks')
-          .select('*')
-          .eq('user_id', emp.user_id)
-          .gte('timestamp', today.toISOString())
-          .order('timestamp', { ascending: true });
+        const marks = marksByUser.get(emp.user_id) || [];
+        const inMark = marks.find((m) => m.mark_type === 'IN');
+        const outMark = marks.filter((m) => m.mark_type === 'OUT').pop();
 
-        const inMark = marks?.find((m) => m.mark_type === 'IN');
-        const outMark = marks?.filter((m) => m.mark_type === 'OUT').pop();
-
-        const schedule = (schedulesData || []).find((item) => item.department_id === emp.department_id);
+        const schedule = scheduleMap.get(emp.department_id);
         const lateMinutes = inMark
           ? calculateLateMinutes(inMark.timestamp, schedule?.checkin_end_time ?? null, schedule?.timezone ?? null)
           : 0;
