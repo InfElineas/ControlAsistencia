@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { useNotifications } from '@/contexts/NotificationsContext';
 import {
   INCIDENT_TYPES,
   IncidentStatus,
@@ -33,6 +34,7 @@ interface Incident {
 export function EmployeeIncidentsPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { createNotification } = useNotifications();
   const [type, setType] = useState<IncidentType>('olvidé marcar');
   const [requestedAt, setRequestedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   const [reason, setReason] = useState('');
@@ -79,6 +81,12 @@ export function EmployeeIncidentsPage() {
     },
     onSuccess: () => {
       toast.success('Incidencia enviada');
+      void createNotification({
+        title: 'Incidencia creada',
+        message: 'Tu incidencia fue registrada y está pendiente de revisión.',
+        type: 'info',
+        link: '/incidents',
+      });
       setReason('');
       queryClient.invalidateQueries({ queryKey: ['incidents', user?.id] });
     },

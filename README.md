@@ -196,3 +196,15 @@ Flujo:
 
 Migración requerida:
 - `supabase/migrations/20260302161000_add_work_locations.sql`
+
+### Sistema de notificaciones
+
+Se incorporó un sistema centralizado de notificaciones para todos los usuarios:
+
+- Icono de campana con contador de no leídas en la barra superior.
+- Página ` /notifications ` para ver todas las notificaciones, filtrar, marcar leídas y navegar a la acción relacionada.
+- Persistencia en base de datos (`notifications`) con RLS por usuario.
+- Generación de notificaciones en eventos clave (marcaje de asistencia, creación/revisión de incidencias).
+
+Migración requerida:
+- `supabase/migrations/20260302174000_add_notifications_system.sql`

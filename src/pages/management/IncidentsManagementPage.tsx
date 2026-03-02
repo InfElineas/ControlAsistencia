@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { IncidentStatus, buildIncidentErrorMessage, formatIncidentStatus } from '@/lib/incidents';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 interface IncidentRow {
   id: string;
@@ -42,6 +43,7 @@ function statusVariant(status: IncidentStatus) {
 export function IncidentsManagementPage() {
   const { user, role } = useAuth();
   const queryClient = useQueryClient();
+  const { createNotification } = useNotifications();
   const [notesById, setNotesById] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<'all' | IncidentStatus>('pending');
   const [search, setSearch] = useState('');
@@ -102,7 +104,7 @@ export function IncidentsManagementPage() {
   const pendingCount = useMemo(() => (data || []).filter((item) => item.status === 'pending').length, [data]);
 
   const reviewMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: 'approved' | 'rejected' }) => {
+    mutationFn: async ({ id, status, userId }: { id: string; status: 'approved' | 'rejected'; userId: string }) => {
       const notes = (notesById[id] || '').trim();
       const { error } = await supabase
         .from('attendance_incidents')
@@ -117,6 +119,13 @@ export function IncidentsManagementPage() {
     },
     onSuccess: (_, variables) => {
       toast.success(variables.status === 'approved' ? 'Incidencia aprobada' : 'Incidencia rechazada');
+      void createNotification({
+        userId: variables.userId,
+        title: variables.status === 'approved' ? 'Incidencia aprobada' : 'Incidencia rechazada',
+        message: variables.status === 'approved' ? 'Tu solicitud fue aprobada por un gestor.' : 'Tu solicitud fue rechazada por un gestor.',
+        type: variables.status === 'approved' ? 'success' : 'warning',
+        link: '/incidents',
+      });
       queryClient.invalidateQueries({ queryKey: ['incidents-management', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['incidents'] });
     },
@@ -195,7 +204,7 @@ export function IncidentsManagementPage() {
               <div className="flex gap-2">
                 <Button
                   className="flex-1"
-                  onClick={() => reviewMutation.mutate({ id: item.id, status: 'approved' })}
+                  onClick={() => reviewMutation.mutate({ id: item.id, status: 'approved', userId: item.user_id })}
                   disabled={reviewMutation.isPending}
                 >
                   Aprobar
@@ -203,7 +212,7 @@ export function IncidentsManagementPage() {
                 <Button
                   className="flex-1"
                   variant="destructive"
-                  onClick={() => reviewMutation.mutate({ id: item.id, status: 'rejected' })}
+                  onClick={() => reviewMutation.mutate({ id: item.id, status: 'rejected', userId: item.user_id })}
                   disabled={reviewMutation.isPending}
                 >
                   Rechazar

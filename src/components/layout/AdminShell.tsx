@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   User,
   TriangleAlert,
+  Bell,
   LogOut,
   Menu,
   X,
@@ -21,6 +22,7 @@ import { useAuth, AppRole } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useDepartments } from '@/hooks/useDepartments';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 
 interface NavItem {
   href: string;
@@ -36,6 +38,7 @@ const navItems: NavItem[] = [
   { href: '/history', label: 'Mi Historial', icon: History, excludeRoles: ['global_manager', 'superadmin'] },
   { href: '/incidents', label: 'Incidencias', icon: TriangleAlert },
   { href: '/profile', label: 'Mi perfil', icon: User },
+  { href: '/notifications', label: 'Notificaciones', icon: Bell },
   { href: '/rest-schedule', label: 'Descansos', icon: Calendar },
   { href: '/vacations', label: 'Vacaciones', icon: PlaneTakeoff, excludeRoles: ['global_manager', 'superadmin'] },
   { href: '/department', label: 'Departamento', icon: Users, roles: ['department_head'] },
@@ -99,9 +102,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           />
           <span className="font-semibold text-sm leading-tight">Asistencia ELINEAS</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+        <div className="flex items-center gap-2">
+          <NotificationBell className="h-9 w-9" />
+          <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
+          </Button>
+        </div>
       </header>
 
       {mobileMenuOpen && (
@@ -132,17 +138,20 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-72 bg-card/95 backdrop-blur-md border-r">
         <div className="p-5 border-b bg-muted/30">
-          <div className="flex items-center gap-3">
-            <img
-              src="/logo-control-asistencia.svg"
-              alt="Control de Asistencia ELINEAS"
-              className="h-12 w-12 rounded-lg object-cover shadow-sm"
-            />
-            <div className="min-w-0">
-              <h1 className="font-bold text-base leading-tight">Control de Asistencia</h1>
-              <p className="text-base leading-tight font-semibold text-primary">ELINEAS</p>
-              <p className="text-xs text-muted-foreground">Plataforma de gestión de asistencia</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <img
+                src="/logo-control-asistencia.svg"
+                alt="Control de Asistencia ELINEAS"
+                className="h-12 w-12 rounded-lg object-cover shadow-sm"
+              />
+              <div className="min-w-0">
+                <h1 className="font-bold text-base leading-tight">Control de Asistencia</h1>
+                <p className="text-base leading-tight font-semibold text-primary">ELINEAS</p>
+                <p className="text-xs text-muted-foreground">Plataforma de gestión de asistencia</p>
+              </div>
             </div>
+            <NotificationBell />
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">

@@ -14,11 +14,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Calendar, ShieldX, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapAttendanceError } from '@/lib/error-messages';
-import { useUIMode } from '@/hooks/use-ui-mode';
-import { EmployeeMarkPage } from '@/pages/employee/EmployeeMarkPage';
+import { useNotifications } from '@/contexts/NotificationsContext';
 
 export default function Attendance() {
-  const { profile, role } = useAuth();
+  const { profile } = useAuth();
+  const { createNotification } = useNotifications();
   const { isRestDay } = useRestSchedule();
   const { config, loading: configLoading } = useGeofenceConfig();
   const { isGlobalManager, loading: gmLoading } = useGlobalManagerCheck();
@@ -102,12 +102,18 @@ export default function Attendance() {
       lastAutoReasonRef.current = null;
     } else {
       lastAutoReasonRef.current = reason;
-      toast.success(
+      const successMessage =
         message ||
-          (reason === 'SCHEDULE'
-            ? 'Salida registrada automáticamente por horario de salida'
-            : 'Salida registrada automáticamente por salida de geofence')
-      );
+        (reason === 'SCHEDULE'
+          ? 'Salida registrada automáticamente por horario de salida'
+          : 'Salida registrada automáticamente por salida de geofence');
+      toast.success(successMessage);
+      void createNotification({
+        title: 'Salida registrada',
+        message: successMessage,
+        type: 'success',
+        link: '/attendance',
+      });
     }
 
     setMarking(false);
@@ -152,7 +158,14 @@ export default function Attendance() {
     if (error) {
       toast.error(mapAttendanceError(error));
     } else {
-      toast.success(message || `${type === 'IN' ? 'Entrada' : 'Salida'} registrada correctamente`);
+      const successMessage = message || `${type === 'IN' ? 'Entrada' : 'Salida'} registrada correctamente`;
+      toast.success(successMessage);
+      void createNotification({
+        title: type === 'IN' ? 'Entrada registrada' : 'Salida registrada',
+        message: successMessage,
+        type: 'success',
+        link: '/attendance',
+      });
     }
     setMarking(false);
   };
