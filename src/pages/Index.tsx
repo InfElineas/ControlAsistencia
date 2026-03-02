@@ -16,6 +16,7 @@ import {
   UserCircle2,
   Users,
   XCircle,
+  TriangleAlert,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAttendance } from '@/hooks/useAttendance';
@@ -97,6 +98,12 @@ export default function Index() {
       description: 'Actualiza tus datos personales',
       icon: UserCircle2,
       route: '/profile',
+    },
+    {
+      label: role === 'employee' ? 'Mis incidencias' : 'Revisar incidencias',
+      description: role === 'employee' ? 'Solicitudes y estado' : 'Aprobación y seguimiento',
+      icon: TriangleAlert,
+      route: '/incidents',
     },
   ];
 

@@ -41,6 +41,8 @@ export default function Configuration() {
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [importingHistory, setImportingHistory] = useState(false);
   const [importSummary, setImportSummary] = useState<AttendanceImportSummary | null>(null);
+  const [workLocations, setWorkLocations] = useState<Array<{ id: string; name: string; center_lat: number; center_lng: number; radius_meters: number; accuracy_threshold: number; block_on_poor_accuracy: boolean; is_active: boolean }>>([]);
+  const [newLocation, setNewLocation] = useState({ name: '', center_lat: 40.416775, center_lng: -3.70379, radius_meters: 100, accuracy_threshold: 50, block_on_poor_accuracy: true });
 
   // Update form when config loads
   useEffect(() => {
@@ -106,6 +108,47 @@ export default function Configuration() {
     return { error };
   };
 
+
+
+  useEffect(() => {
+    const fetchWorkLocations = async () => {
+      const { data } = await supabase
+        .from('work_locations')
+        .select('*')
+        .order('name', { ascending: true });
+
+      setWorkLocations((data || []) as Array<{ id: string; name: string; center_lat: number; center_lng: number; radius_meters: number; accuracy_threshold: number; block_on_poor_accuracy: boolean; is_active: boolean }>);
+    };
+
+    fetchWorkLocations();
+  }, []);
+
+  const handleCreateWorkLocation = async () => {
+    if (!newLocation.name.trim()) {
+      toast.error('Debes indicar un nombre para la ubicación.');
+      return;
+    }
+
+    const { error } = await supabase.from('work_locations').insert({
+      name: newLocation.name.trim(),
+      center_lat: newLocation.center_lat,
+      center_lng: newLocation.center_lng,
+      radius_meters: newLocation.radius_meters,
+      accuracy_threshold: newLocation.accuracy_threshold,
+      block_on_poor_accuracy: newLocation.block_on_poor_accuracy,
+      is_active: true,
+    });
+
+    if (error) {
+      toast.error(mapGenericActionError(error, 'No se pudo crear la ubicación de trabajo.'));
+      return;
+    }
+
+    const { data } = await supabase.from('work_locations').select('*').order('name', { ascending: true });
+    setWorkLocations((data || []) as Array<{ id: string; name: string; center_lat: number; center_lng: number; radius_meters: number; accuracy_threshold: number; block_on_poor_accuracy: boolean; is_active: boolean }>);
+    setNewLocation({ name: '', center_lat: 40.416775, center_lng: -3.70379, radius_meters: 100, accuracy_threshold: 50, block_on_poor_accuracy: true });
+    toast.success('Ubicación creada correctamente.');
+  };
 
   const handleSaveGeneral = async () => {
     setSavingGeneral(true);
@@ -399,6 +442,56 @@ export default function Configuration() {
                     }
                   />
                 </div>
+
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Ubicaciones de trabajo</CardTitle>
+                    <CardDescription>Configura múltiples ubicaciones para que el empleado seleccione al iniciar sesión.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      {workLocations.map((location) => (
+                        <div key={location.id} className="rounded-lg border p-3 text-sm">
+                          <p className="font-semibold">{location.name}</p>
+                          <p className="text-muted-foreground">Lat {location.center_lat} · Lng {location.center_lng} · Radio {location.radius_meters}m</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        placeholder="Nombre de ubicación"
+                        value={newLocation.name}
+                        onChange={(e) => setNewLocation((p) => ({ ...p, name: e.target.value }))}
+                      />
+                      <Input
+                        type="number"
+                        step="0.000001"
+                        placeholder="Latitud"
+                        value={newLocation.center_lat}
+                        onChange={(e) => setNewLocation((p) => ({ ...p, center_lat: parseFloat(e.target.value) }))}
+                      />
+                      <Input
+                        type="number"
+                        step="0.000001"
+                        placeholder="Longitud"
+                        value={newLocation.center_lng}
+                        onChange={(e) => setNewLocation((p) => ({ ...p, center_lng: parseFloat(e.target.value) }))}
+                      />
+                      <Input
+                        type="number"
+                        placeholder="Radio (m)"
+                        value={newLocation.radius_meters}
+                        onChange={(e) => setNewLocation((p) => ({ ...p, radius_meters: parseInt(e.target.value) }))}
+                      />
+                    </div>
+
+                    <Button variant="outline" className="w-full" onClick={handleCreateWorkLocation}>
+                      Crear ubicación
+                    </Button>
+                  </CardContent>
+                </Card>
 
                 <Button onClick={handleSaveGeofence} disabled={saving} className="w-full">
                   {saving ? (
