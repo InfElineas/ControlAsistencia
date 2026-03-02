@@ -9,7 +9,7 @@ import {
   Clock,
   Loader2,
   Timer,
-  TriangleAlert,
+  TriangleAlert as AlertTriangleIcon,
   Users,
   XCircle,
   TriangleAlert,
@@ -57,9 +57,6 @@ export default function Index() {
   const uiMode = useUIMode(role ?? null);
 
   const isGlobalManager = role === 'global_manager' || role === 'superadmin';
-
-  const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
-  const [loadingAdminStats, setLoadingAdminStats] = useState(false);
 
   const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
   const [loadingAdminStats, setLoadingAdminStats] = useState(false);
@@ -358,7 +355,7 @@ export default function Index() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="flex items-center gap-2">
-                <TriangleAlert className="h-4 w-4 text-warning" />
+                <AlertTriangleIcon className="h-4 w-4 text-warning" />
                 Incidencias pendientes: <span className="font-semibold">{adminStats?.pendingIncidents ?? 0}</span>
               </div>
               <div className="flex items-center gap-2">
