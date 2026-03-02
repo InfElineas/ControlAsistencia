@@ -17,6 +17,7 @@ import UserManagement from "./pages/UserManagement";
 import DepartmentsManagement from "./pages/DepartmentsManagement";
 import Vacations from "./pages/Vacations";
 import Profile from "./pages/Profile";
+import Incidents from "./pages/Incidents";
 import SuperAdmin from "./pages/SuperAdmin";
 import NotFound from "./pages/NotFound";
 
@@ -116,6 +117,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={["superadmin"]}>
                   <SuperAdmin />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/incidents"
+              element={
+                <ProtectedRoute>
+                  <Incidents />
                 </ProtectedRoute>
               }
             />

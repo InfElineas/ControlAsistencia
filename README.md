@@ -109,3 +109,90 @@ Se generó una auditoría con hallazgos y plan de acción en:
 
 - `docs/usabilidad-calidad-reporte.md`
 - `docs/guia-remediacion-paso-a-paso.md`
+
+## Employee Mobile Mode (nuevo)
+
+Se añadió un modo móvil orientado a empleados con navegación inferior y auto-selección de interfaz.
+
+### Auto-switch de UI
+
+La app ahora decide entre dos shells:
+
+- **AdminShell**: sidebar tradicional (backoffice desktop).
+- **EmployeeShell**: navegación inferior mobile-first para empleados.
+
+Reglas:
+
+- Si el viewport es móvil (`< 768px`) y el rol **no es administrativo**, se usa `EmployeeShell`.
+- Si el rol es `department_head`, `global_manager` o `superadmin`, o si el viewport es desktop, se usa `AdminShell`.
+
+### Override para debugging
+
+Puedes forzar el shell desde query param en cualquier ruta protegida:
+
+- `?ui=employee`
+- `?ui=admin`
+
+Ejemplos:
+
+- `/attendance?ui=employee`
+- `/history?ui=admin`
+
+### Tabs móviles para empleado
+
+- `Marcar` → `/attendance`
+- `Mi semana` → `/history`
+- `Incidencias` → `/incidents`
+- `Perfil` → `/profile`
+
+### Requisito de base de datos para Incidencias
+
+Para que la pestaña **Incidencias** funcione (listar/crear), es obligatorio tener aplicada la migración:
+
+- `supabase/migrations/20260228194000_add_attendance_incidents.sql`
+
+Si no está aplicada, la UI mostrará un aviso de "falta actualizar la base de datos" y deshabilitará la creación.
+
+Comandos sugeridos (según tu flujo):
+
+```bash
+# Local / proyecto enlazado
+supabase db push
+
+# O ejecuta específicamente la migración en tu pipeline de deploy
+```
+
+### Flujo de aprobación de incidencias (roles)
+
+- **Empleado**: crea y consulta sus incidencias en `/incidents`.
+- **Department Head / Global Manager / Superadmin**: revisan, aprueban o rechazan incidencias en la misma ruta `/incidents` (vista de gestión por rol).
+- La aprobación guarda estado (`approved/rejected`), notas del gestor y datos de revisión (`reviewed_by`, `reviewed_at`).
+
+### Optimización del sistema de incidencias
+
+Se mejoró el flujo de incidencias con foco en usabilidad y rendimiento:
+
+- Empleado:
+  - filtro por estado (todas/pendientes/aprobadas/rechazadas),
+  - contador de pendientes,
+  - validación de motivo para tipos críticos,
+  - etiquetas de estado legibles.
+- Gestores:
+  - búsqueda por empleado/correo/departamento/tipo,
+  - filtro por estado,
+  - orden con prioridad de pendientes,
+  - notas de revisión con límite para mantener consistencia.
+- Rendimiento de BD:
+  - índices sobre `attendance_incidents` para consultas por usuario, estado y fechas.
+
+### Múltiples ubicaciones de trabajo
+
+Ahora se pueden configurar múltiples ubicaciones (geofence) en **Configuración → Geofence → Ubicaciones de trabajo**.
+
+Flujo:
+- Gestor/superadmin crea nuevas ubicaciones (nombre + coordenadas + radio).
+- Cuando el empleado inicia sesión y tiene más de una ubicación disponible, el sistema le solicita seleccionar dónde trabajará.
+- La validación de geofence en marcaje usa la ubicación seleccionada para esa sesión/dispositivo.
+
+Migración requerida:
+- `supabase/migrations/20260302161000_add_work_locations.sql`

@@ -145,6 +145,49 @@ export type Database = {
         }
         Relationships: []
       }
+
+      attendance_incidents: {
+        Row: {
+          created_at: string
+          id: string
+          incident_type: string
+          manager_notes: string | null
+          reason: string | null
+          requested_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          incident_type: string
+          manager_notes?: string | null
+          reason?: string | null
+          requested_at: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          incident_type?: string
+          manager_notes?: string | null
+          reason?: string | null
+          requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           action: string
@@ -264,6 +307,45 @@ export type Database = {
           pause_reason?: string | null
           paused_at?: string | null
           rest_groups_enabled?: boolean
+        }
+        Relationships: []
+      }
+      work_locations: {
+        Row: {
+          accuracy_threshold: number
+          block_on_poor_accuracy: boolean
+          center_lat: number
+          center_lng: number
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          radius_meters: number
+          updated_at: string
+        }
+        Insert: {
+          accuracy_threshold?: number
+          block_on_poor_accuracy?: boolean
+          center_lat: number
+          center_lng: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          radius_meters?: number
+          updated_at?: string
+        }
+        Update: {
+          accuracy_threshold?: number
+          block_on_poor_accuracy?: boolean
+          center_lat?: number
+          center_lng?: number
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          radius_meters?: number
+          updated_at?: string
         }
         Relationships: []
       }
