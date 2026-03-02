@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { MetricCard } from '@/components/dashboard/MetricCard';
@@ -431,17 +431,35 @@ export default function GlobalPanel() {
     setDetailsLoading(false);
   };
 
+  const scopedAttendance = useMemo(
+    () => (selectedDept === 'all' ? attendance : attendance.filter((row) => row.department === selectedDept)),
+    [attendance, selectedDept]
+  );
+
+  const departmentHeadcount = useMemo(() => {
+    const map = new Map<string, number>();
+    employees.forEach((employee) => {
+      map.set(employee.department_name, (map.get(employee.department_name) || 0) + 1);
+    });
+
+    return Array.from(map.entries())
+      .map(([department, count]) => ({ department, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [employees]);
+
   const metrics = {
-    total: employees.length,
-    present: attendance.filter((a) => a.todayStatus === 'PRESENTE' || a.todayStatus === 'TARDE').length,
-    absent: attendance.filter((a) => a.todayStatus === 'AUSENTE').length,
-    compliance: employees.length > 0
-      ? Math.round(
-          (attendance.filter((a) => a.todayStatus === 'PRESENTE').length /
-            employees.length) *
-            100
-        )
-      : 0,
+    total: scopedAttendance.length,
+    present: scopedAttendance.filter((a) => a.todayStatus === 'PRESENTE' || a.todayStatus === 'TARDE').length,
+    absent: scopedAttendance.filter((a) => a.todayStatus === 'AUSENTE').length,
+    late: scopedAttendance.filter((a) => a.todayStatus === 'TARDE').length,
+    compliance:
+      scopedAttendance.length > 0
+        ? Math.round(
+            (scopedAttendance.filter((a) => a.todayStatus === 'PRESENTE' || a.todayStatus === 'TARDE').length /
+              scopedAttendance.length) *
+              100
+          )
+        : 0,
   };
 
   const filteredAttendance = attendance.filter((a) => {
@@ -512,7 +530,7 @@ export default function GlobalPanel() {
           <div>
             <h1 className="text-2xl font-bold">Panel Global</h1>
             <p className="text-muted-foreground">
-              Vista general de todos los empleados · Jefes incluidos: {includeHeadsInGlobalReports ? 'Sí' : 'No'}
+              Vista general de todos los empleados · Jefes incluidos: {includeHeadsInGlobalReports ? 'Sí' : 'No'} · Filtro: {selectedDept === 'all' ? 'Todos los departamentos' : selectedDept}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -543,7 +561,7 @@ export default function GlobalPanel() {
         </div>
 
         {/* Metrics */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <MetricCard
             title="Total Empleados"
             value={metrics.total}
@@ -562,6 +580,13 @@ export default function GlobalPanel() {
             icon={UserX}
             variant="destructive"
           />
+
+          <MetricCard
+            title="Tardanzas Hoy"
+            value={metrics.late}
+            icon={Clock}
+            variant="warning"
+          />
           <MetricCard
             title="Cumplimiento"
             value={`${metrics.compliance}%`}
@@ -569,6 +594,22 @@ export default function GlobalPanel() {
             variant="default"
           />
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Trabajadores por departamento</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {departmentHeadcount.map((item) => (
+                <div key={item.department} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">{item.department}</span>
+                  <span className="font-semibold">{item.count}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Filters and Table */}
         <Card>
