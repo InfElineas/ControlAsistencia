@@ -15,9 +15,12 @@ import { AlertCircle, Calendar, ShieldX, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapAttendanceError } from '@/lib/error-messages';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useUIMode } from '@/hooks/use-ui-mode';
+import { EmployeeMarkPage } from '@/pages/employee/EmployeeMarkPage';
 
 export default function Attendance() {
   const { profile } = useAuth();
+  const role = profile?.role ?? null;
   const { createNotification } = useNotifications();
   const { isRestDay } = useRestSchedule();
   const { config, loading: configLoading } = useGeofenceConfig();
@@ -128,6 +131,7 @@ export default function Attendance() {
     accuracy,
     geofenceResult?.distance,
     geofenceResult?.isInside,
+    createNotification,
   ]);
 
   const handleMark = async (type: 'IN' | 'OUT') => {
@@ -204,7 +208,15 @@ export default function Attendance() {
     }, 60_000);
 
     return () => window.clearInterval(interval);
-  }, [autoMarkOut, canMarkOut, isGlobalManager, isRest, schedule?.checkout_start_time, schedule?.timezone]);
+  }, [
+    autoMarkOut,
+    canMarkOut,
+    hasReachedCheckoutTime,
+    isGlobalManager,
+    isRest,
+    schedule?.checkout_start_time,
+    schedule?.timezone,
+  ]);
 
   useEffect(() => {
     if (isGlobalManager || isRest || !canMarkOut) return;
