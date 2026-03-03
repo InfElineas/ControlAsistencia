@@ -17,6 +17,8 @@ import { mapAttendanceError } from '@/lib/error-messages';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useUIMode } from '@/hooks/use-ui-mode';
 import { EmployeeMarkPage } from '@/pages/employee/EmployeeMarkPage';
+import { useWorkLocations } from '@/hooks/useWorkLocations';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function Attendance() {
   const { profile } = useAuth();
@@ -49,6 +51,7 @@ export default function Attendance() {
     markAttendance,
   } = useAttendance();
 
+  const { locations, activeLocationId, setActiveLocation } = useWorkLocations();
   const uiMode = useUIMode(role);
   const [marking, setMarking] = useState(false);
   const [geofenceResult, setGeofenceResult] = useState<{
@@ -83,11 +86,12 @@ export default function Attendance() {
   const isRest = isRestDay(today);
   const checkinCheck = isWithinCheckinWindow();
   
-  const canMarkInAction = !isGlobalManager && !isRest && Boolean(geofenceResult?.isInside) && canMarkIn;
-  const canMarkOutAction = !isGlobalManager && !isRest && canMarkOut;
+  const hasSelectedLocation = !isGlobalManager && locations.length > 0 ? Boolean(activeLocationId) : true;
+  const canMarkInAction = !isGlobalManager && !isRest && hasSelectedLocation && Boolean(geofenceResult?.isInside) && canMarkIn;
+  const canMarkOutAction = !isGlobalManager && !isRest && hasSelectedLocation && canMarkOut;
 
   const autoMarkOut = useCallback(async (reason: 'SCHEDULE' | 'GEOFENCE_EXIT') => {
-    if (isGlobalManager || isRest || !canMarkOut || autoMarkingRef.current) return;
+    if (isGlobalManager || isRest || !canMarkOut || autoMarkingRef.current || !activeLocationId) return;
 
     autoMarkingRef.current = true;
     setMarking(true);
@@ -98,6 +102,7 @@ export default function Attendance() {
       accuracy,
       distanceToCenter: geofenceResult?.distance ?? null,
       insideGeofence: geofenceResult?.isInside ?? false,
+      workLocationId: activeLocationId,
     });
 
     if (error) {
@@ -132,11 +137,17 @@ export default function Attendance() {
     geofenceResult?.distance,
     geofenceResult?.isInside,
     createNotification,
+    activeLocationId,
   ]);
 
   const handleMark = async (type: 'IN' | 'OUT') => {
     if (isGlobalManager) {
       toast.error('No autorizado para registrar asistencia o descansos');
+      return;
+    }
+
+    if (!activeLocationId) {
+      toast.error('Debes seleccionar una ubicación de trabajo antes de marcar asistencia');
       return;
     }
 
@@ -157,6 +168,7 @@ export default function Attendance() {
       accuracy,
       distanceToCenter: geofenceResult?.distance ?? null,
       insideGeofence: geofenceResult?.isInside ?? false,
+      workLocationId: activeLocationId,
     });
 
     if (error) {
@@ -309,6 +321,28 @@ export default function Attendance() {
                 No es necesario marcar asistencia hoy
               </p>
             </div>
+          </div>
+        )}
+
+
+        {!isGlobalManager && locations.length > 0 && (
+          <div className="rounded-xl border p-4 space-y-2">
+            <p className="text-sm font-medium">Ubicación de trabajo para hoy</p>
+            <Select value={activeLocationId ?? ''} onValueChange={setActiveLocation}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona una ubicación" />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map((location) => (
+                  <SelectItem key={location.id} value={location.id}>
+                    {location.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!hasSelectedLocation && (
+              <p className="text-xs text-warning">Debes seleccionar una ubicación para habilitar el marcaje.</p>
+            )}
           </div>
         )}
 
