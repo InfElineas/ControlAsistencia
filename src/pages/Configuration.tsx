@@ -15,6 +15,7 @@ import { Loader2, MapPin, Clock, Settings, Save, FileSpreadsheet, Upload, PlusCi
 import { toast } from 'sonner';
 import { mapGenericActionError } from '@/lib/error-messages';
 import * as XLSX from 'xlsx';
+import { LocationMapPicker } from '@/components/configuration/LocationMapPicker';
 
 type AttendanceImportSummary = {
   imported_marks: number;
@@ -349,6 +350,8 @@ export default function Configuration() {
     }
   };
 
+  const locationForm = editingLocation ?? newLocation;
+
   if (loading) {
     return (
       <AppLayout>
@@ -435,36 +438,27 @@ export default function Configuration() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                <LocationMapPicker
+                  latitude={geofenceForm.center_lat}
+                  longitude={geofenceForm.center_lng}
+                  radiusMeters={geofenceForm.radius_meters}
+                  onChange={({ lat, lng }) =>
+                    setGeofenceForm((p) => ({
+                      ...p,
+                      center_lat: Number(lat.toFixed(6)),
+                      center_lng: Number(lng.toFixed(6)),
+                    }))
+                  }
+                />
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="lat">Latitud del centro</Label>
-                    <Input
-                      id="lat"
-                      type="number"
-                      step="0.000001"
-                      value={geofenceForm.center_lat}
-                      onChange={(e) =>
-                        setGeofenceForm((p) => ({
-                          ...p,
-                          center_lat: parseFloat(e.target.value),
-                        }))
-                      }
-                    />
+                    <Input id="lat" value={geofenceForm.center_lat} readOnly />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lng">Longitud del centro</Label>
-                    <Input
-                      id="lng"
-                      type="number"
-                      step="0.000001"
-                      value={geofenceForm.center_lng}
-                      onChange={(e) =>
-                        setGeofenceForm((p) => ({
-                          ...p,
-                          center_lng: parseFloat(e.target.value),
-                        }))
-                      }
-                    />
+                    <Input id="lng" value={geofenceForm.center_lng} readOnly />
                   </div>
                 </div>
 
@@ -560,7 +554,7 @@ export default function Configuration() {
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Input
                           placeholder="Nombre de ubicación"
-                          value={editingLocation ? editingLocation.name : newLocation.name}
+                          value={locationForm.name}
                           onChange={(e) =>
                             editingLocation
                               ? setEditingLocation((prev) => (prev ? { ...prev, name: e.target.value } : prev))
@@ -569,37 +563,37 @@ export default function Configuration() {
                         />
                         <Input
                           type="number"
-                          step="0.000001"
-                          placeholder="Latitud"
-                          value={editingLocation ? editingLocation.center_lat : newLocation.center_lat}
-                          onChange={(e) =>
-                            editingLocation
-                              ? setEditingLocation((prev) => (prev ? { ...prev, center_lat: parseFloat(e.target.value) } : prev))
-                              : setNewLocation((p) => ({ ...p, center_lat: parseFloat(e.target.value) }))
-                          }
-                        />
-                        <Input
-                          type="number"
-                          step="0.000001"
-                          placeholder="Longitud"
-                          value={editingLocation ? editingLocation.center_lng : newLocation.center_lng}
-                          onChange={(e) =>
-                            editingLocation
-                              ? setEditingLocation((prev) => (prev ? { ...prev, center_lng: parseFloat(e.target.value) } : prev))
-                              : setNewLocation((p) => ({ ...p, center_lng: parseFloat(e.target.value) }))
-                          }
-                        />
-                        <Input
-                          type="number"
                           placeholder="Radio (m)"
-                          value={editingLocation ? editingLocation.radius_meters : newLocation.radius_meters}
+                          value={locationForm.radius_meters}
                           onChange={(e) =>
                             editingLocation
-                              ? setEditingLocation((prev) => (prev ? { ...prev, radius_meters: parseInt(e.target.value, 10) } : prev))
-                              : setNewLocation((p) => ({ ...p, radius_meters: parseInt(e.target.value, 10) }))
+                              ? setEditingLocation((prev) => (prev ? { ...prev, radius_meters: parseInt(e.target.value, 10) || 0 } : prev))
+                              : setNewLocation((p) => ({ ...p, radius_meters: parseInt(e.target.value, 10) || 0 }))
+                          }
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Precisión GPS (m)"
+                          value={locationForm.accuracy_threshold}
+                          onChange={(e) =>
+                            editingLocation
+                              ? setEditingLocation((prev) => (prev ? { ...prev, accuracy_threshold: parseInt(e.target.value, 10) || 0 } : prev))
+                              : setNewLocation((p) => ({ ...p, accuracy_threshold: parseInt(e.target.value, 10) || 0 }))
                           }
                         />
                       </div>
+
+                      <LocationMapPicker
+                        latitude={locationForm.center_lat}
+                        longitude={locationForm.center_lng}
+                        radiusMeters={locationForm.radius_meters}
+                        onChange={({ lat, lng }) =>
+                          editingLocation
+                            ? setEditingLocation((prev) => (prev ? { ...prev, center_lat: Number(lat.toFixed(6)), center_lng: Number(lng.toFixed(6)) } : prev))
+                            : setNewLocation((p) => ({ ...p, center_lat: Number(lat.toFixed(6)), center_lng: Number(lng.toFixed(6)) }))
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">Lat {locationForm.center_lat} · Lng {locationForm.center_lng}</p>
                       <div className="flex items-center justify-between rounded-md bg-secondary/40 px-3 py-2">
                         <div>
                           <p className="text-sm font-medium">Ubicación activa</p>
@@ -615,6 +609,21 @@ export default function Configuration() {
                           disabled={!editingLocation}
                         />
                       </div>
+                      <div className="flex items-center justify-between rounded-md bg-secondary/40 px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium">Bloquear por baja precisión</p>
+                          <p className="text-xs text-muted-foreground">Rechaza marcajes con GPS impreciso en esta locación.</p>
+                        </div>
+                        <Switch
+                          checked={locationForm.block_on_poor_accuracy}
+                          onCheckedChange={(checked) =>
+                            editingLocation
+                              ? setEditingLocation((prev) => (prev ? { ...prev, block_on_poor_accuracy: checked } : prev))
+                              : setNewLocation((p) => ({ ...p, block_on_poor_accuracy: checked }))
+                          }
+                        />
+                      </div>
+
                       <div className="flex gap-2">
                         {editingLocation ? (
                           <>
