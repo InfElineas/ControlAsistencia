@@ -69,7 +69,7 @@ export function LocationMapPicker({ latitude, longitude, radiusMeters, onChange 
   return (
     <div className="space-y-2">
       <div className="relative h-72 w-full overflow-hidden rounded-lg border bg-slate-100 cursor-crosshair" onClick={handleClick}>
-        {GRID.flatMap((x) =>
+        {GRID.map((x) =>
           GRID.map((y) => {
             const tileX = mapModel.centerTileX + x;
             const tileY = mapModel.centerTileY + y;
