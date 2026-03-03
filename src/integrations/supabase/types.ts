@@ -77,6 +77,7 @@ export type Database = {
           mark_type: string
           timestamp: string
           user_id: string
+          work_location_id: string | null
         }
         Insert: {
           accuracy?: number | null
@@ -91,6 +92,7 @@ export type Database = {
           mark_type: string
           timestamp?: string
           user_id: string
+          work_location_id?: string | null
         }
         Update: {
           accuracy?: number | null
@@ -105,8 +107,17 @@ export type Database = {
           mark_type?: string
           timestamp?: string
           user_id?: string
+          work_location_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "attendance_marks_work_location_id_fkey"
+            columns: ["work_location_id"]
+            isOneToOne: false
+            referencedRelation: "work_locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
 
       attendance_absence_reviews: {
