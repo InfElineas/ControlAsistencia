@@ -131,6 +131,7 @@ export default function Attendance() {
     accuracy,
     geofenceResult?.distance,
     geofenceResult?.isInside,
+    createNotification,
   ]);
 
   const handleMark = async (type: 'IN' | 'OUT') => {
@@ -207,7 +208,15 @@ export default function Attendance() {
     }, 60_000);
 
     return () => window.clearInterval(interval);
-  }, [autoMarkOut, canMarkOut, isGlobalManager, isRest, schedule?.checkout_start_time, schedule?.timezone]);
+  }, [
+    autoMarkOut,
+    canMarkOut,
+    hasReachedCheckoutTime,
+    isGlobalManager,
+    isRest,
+    schedule?.checkout_start_time,
+    schedule?.timezone,
+  ]);
 
   useEffect(() => {
     if (isGlobalManager || isRest || !canMarkOut) return;
