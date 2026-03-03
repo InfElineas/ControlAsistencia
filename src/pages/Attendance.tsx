@@ -15,9 +15,12 @@ import { AlertCircle, Calendar, ShieldX, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapAttendanceError } from '@/lib/error-messages';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useUIMode } from '@/hooks/use-ui-mode';
+import { EmployeeMarkPage } from '@/pages/employee/EmployeeMarkPage';
 
 export default function Attendance() {
   const { profile } = useAuth();
+  const role = profile?.role ?? null;
   const { createNotification } = useNotifications();
   const { isRestDay } = useRestSchedule();
   const { config, loading: configLoading } = useGeofenceConfig();
