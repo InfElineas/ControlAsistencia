@@ -14,7 +14,7 @@ export function WorkLocationSelector() {
     if (!user) return false;
     if (role === 'global_manager' || role === 'superadmin') return false;
     if (loading) return false;
-    if (locations.length <= 1) return false;
+    if (locations.length === 0) return false;
     return !activeLocationId;
   }, [activeLocationId, loading, locations.length, role, user]);
 
@@ -23,6 +23,13 @@ export function WorkLocationSelector() {
       setSelected(locations[0].id);
     }
   }, [locations, selected]);
+
+
+  useEffect(() => {
+    if (!activeLocationId) return;
+    if (locations.some((item) => item.id === activeLocationId)) return;
+    setSelected('');
+  }, [activeLocationId, locations]);
 
   const onConfirm = () => {
     if (!selected) return;
