@@ -78,9 +78,11 @@ export function useWorkLocations() {
 
   useEffect(() => {
     if (!activeLocationId) return;
+    if (loading) return;
+    if (locations.length === 0) return;
     if (locations.some((location) => location.id === activeLocationId)) return;
     clearActiveLocation();
-  }, [activeLocationId, clearActiveLocation, locations]);
+  }, [activeLocationId, clearActiveLocation, loading, locations]);
 
   return {
     locations,
