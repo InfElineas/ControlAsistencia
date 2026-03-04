@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getErrorMessage } from '@/lib/errors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,6 +47,7 @@ function getCurrentTimeInTimezone(timezone: string): string {
 export function useDepartmentSchedule() {
   const { profile } = useAuth();
   const [schedule, setSchedule] = useState<DepartmentSchedule | null>(null);
+  const [globalTimezone, setGlobalTimezone] = useState<string>('UTC');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,14 +59,25 @@ export function useDepartmentSchedule() {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('department_schedules')
-          .select('*')
-          .eq('department_id', profile.department_id)
-          .single();
+        const [{ data, error }, { data: timezoneConfig }] = await Promise.all([
+          supabase
+            .from('department_schedules')
+            .select('*')
+            .eq('department_id', profile.department_id)
+            .single(),
+          supabase
+            .from('app_config')
+            .select('value')
+            .eq('key', 'global_timezone')
+            .maybeSingle(),
+        ]);
 
         if (error && error.code !== 'PGRST116') {
           throw error;
+        }
+
+        if (typeof timezoneConfig?.value === 'string') {
+          setGlobalTimezone(timezoneConfig.value);
         }
 
         setSchedule(data);
@@ -84,7 +96,8 @@ export function useDepartmentSchedule() {
       return { allowed: false, message: 'Departamento sin horario configurado' };
     }
 
-    const currentTime = getCurrentTimeInTimezone(schedule.timezone);
+    const effectiveTimezone = globalTimezone || schedule.timezone;
+    const currentTime = getCurrentTimeInTimezone(effectiveTimezone);
     const currentSeconds = parseTimeToSeconds(currentTime);
     const startSeconds = parseTimeToSeconds(schedule.checkin_start_time);
     const endSeconds = parseTimeToSeconds(schedule.checkin_end_time);
@@ -92,14 +105,14 @@ export function useDepartmentSchedule() {
     if (currentSeconds < startSeconds && !schedule.allow_early_checkin) {
       return {
         allowed: false,
-        message: `Entrada anticipada no permitida. Horario: ${schedule.checkin_start_time.slice(0, 5)} - ${schedule.checkin_end_time.slice(0, 5)} (${schedule.timezone})`,
+        message: `Entrada anticipada no permitida. Horario: ${schedule.checkin_start_time.slice(0, 5)} - ${schedule.checkin_end_time.slice(0, 5)} (${effectiveTimezone})`,
       };
     }
 
     if (currentSeconds > endSeconds) {
       return {
         allowed: false,
-        message: `Hora de entrada excedida. Horario: ${schedule.checkin_start_time.slice(0, 5)} - ${schedule.checkin_end_time.slice(0, 5)} (${schedule.timezone})`,
+        message: `Hora de entrada excedida. Horario: ${schedule.checkin_start_time.slice(0, 5)} - ${schedule.checkin_end_time.slice(0, 5)} (${effectiveTimezone})`,
       };
     }
 
@@ -108,14 +121,16 @@ export function useDepartmentSchedule() {
 
   const getCurrentTimeLabel = (): string | null => {
     if (!schedule) return null;
-    const currentTime = getCurrentTimeInTimezone(schedule.timezone);
-    return `${currentTime.slice(0, 5)} (${schedule.timezone})`;
+    const effectiveTimezone = globalTimezone || schedule.timezone;
+    const currentTime = getCurrentTimeInTimezone(effectiveTimezone);
+    return `${currentTime.slice(0, 5)} (${effectiveTimezone})`;
   };
 
   const hasReachedCheckoutTime = (): boolean => {
     if (!schedule?.checkout_start_time) return false;
 
-    const currentTime = getCurrentTimeInTimezone(schedule.timezone);
+    const effectiveTimezone = globalTimezone || schedule.timezone;
+    const currentTime = getCurrentTimeInTimezone(effectiveTimezone);
     const currentSeconds = parseTimeToSeconds(currentTime);
     const checkoutStartSeconds = parseTimeToSeconds(schedule.checkout_start_time);
 

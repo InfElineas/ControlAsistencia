@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { ComponentProps } from 'react';
 import { useGeofenceConfig } from '@/hooks/useGeofenceConfig';
 import { useDepartmentSchedules } from '@/hooks/useDepartmentSchedules';
@@ -10,11 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, MapPin, Clock, Settings, Save, FileSpreadsheet, Upload, PlusCircle, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapGenericActionError } from '@/lib/error-messages';
 import * as XLSX from 'xlsx';
+import { LocationMapPicker } from '@/components/configuration/LocationMapPicker';
 
 type AttendanceImportSummary = {
   imported_marks: number;
@@ -32,22 +34,30 @@ type WorkLocation = {
   is_active: boolean;
 };
 
+const TIMEZONE_OPTIONS = [
+  { value: 'America/Lima', label: 'Perú (America/Lima)' },
+  { value: 'America/Bogota', label: 'Colombia (America/Bogota)' },
+  { value: 'America/Mexico_City', label: 'México CDMX (America/Mexico_City)' },
+  { value: 'America/Santiago', label: 'Chile (America/Santiago)' },
+  { value: 'America/La_Paz', label: 'Bolivia (America/La_Paz)' },
+  { value: 'America/Guayaquil', label: 'Ecuador (America/Guayaquil)' },
+  { value: 'America/Asuncion', label: 'Paraguay (America/Asuncion)' },
+  { value: 'America/Montevideo', label: 'Uruguay (America/Montevideo)' },
+  { value: 'America/Caracas', label: 'Venezuela (America/Caracas)' },
+  { value: 'Europe/Madrid', label: 'España (Europe/Madrid)' },
+  { value: 'UTC', label: 'UTC' },
+] as const;
+
 export default function Configuration() {
-  const { config, loading, updateConfig } = useGeofenceConfig();
+  const { config, loading } = useGeofenceConfig();
   const { departmentsWithSchedules, loading: schedulesLoading, updateSchedule, updateDepartmentPause } = useDepartmentSchedules();
   
-  const [geofenceForm, setGeofenceForm] = useState({
-    center_lat: config?.center_lat || 40.416775,
-    center_lng: config?.center_lng || -3.703790,
-    radius_meters: config?.radius_meters || 100,
-    accuracy_threshold: config?.accuracy_threshold || 50,
-    block_on_poor_accuracy: config?.block_on_poor_accuracy ?? true,
-  });
-  const [saving, setSaving] = useState(false);
   const [generalConfig, setGeneralConfig] = useState({
     includeHeadsInGlobalReports: false,
     lateToleranceMinutes: 15,
     vacationDaysPerWorkedDay: 0.0833333333,
+    globalTimezone: 'America/Lima',
+    restDaysMinSeparation: 4,
   });
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [importingHistory, setImportingHistory] = useState(false);
@@ -57,26 +67,13 @@ export default function Configuration() {
   const [editingLocation, setEditingLocation] = useState<WorkLocation | null>(null);
   const [savingLocation, setSavingLocation] = useState(false);
 
-  // Update form when config loads
-  useEffect(() => {
-    if (config) {
-      setGeofenceForm({
-        center_lat: config.center_lat,
-        center_lng: config.center_lng,
-        radius_meters: config.radius_meters,
-        accuracy_threshold: config.accuracy_threshold,
-        block_on_poor_accuracy: config.block_on_poor_accuracy,
-      });
-    }
-  }, [config]);
-
 
   useEffect(() => {
     const fetchGeneralConfig = async () => {
       const { data, error } = await supabase
         .from('app_config')
         .select('key, value')
-        .in('key', ['include_heads_in_global_reports', 'late_tolerance_minutes', 'vacation_days_per_worked_day']);
+        .in('key', ['include_heads_in_global_reports', 'late_tolerance_minutes', 'vacation_days_per_worked_day', 'global_timezone', 'rest_days_min_separation']);
 
       if (error) {
         toast.error(mapGenericActionError(error, 'No se pudo cargar la configuración general.'));
@@ -86,28 +83,21 @@ export default function Configuration() {
       const includeHeads = data?.find((item) => item.key === 'include_heads_in_global_reports')?.value;
       const lateTolerance = data?.find((item) => item.key === 'late_tolerance_minutes')?.value;
       const vacationRate = data?.find((item) => item.key === 'vacation_days_per_worked_day')?.value;
+      const globalTimezone = data?.find((item) => item.key === 'global_timezone')?.value;
+      const restDaysMinSeparation = data?.find((item) => item.key === 'rest_days_min_separation')?.value;
 
       setGeneralConfig({
         includeHeadsInGlobalReports: typeof includeHeads === 'boolean' ? includeHeads : false,
         lateToleranceMinutes: typeof lateTolerance === 'number' ? lateTolerance : 15,
         vacationDaysPerWorkedDay: typeof vacationRate === 'number' ? vacationRate : 0.0833333333,
+        globalTimezone: typeof globalTimezone === 'string' ? globalTimezone : 'America/Lima',
+        restDaysMinSeparation: typeof restDaysMinSeparation === 'number' ? restDaysMinSeparation : 4,
       });
     };
 
     fetchGeneralConfig();
   }, []);
 
-  const handleSaveGeofence = async () => {
-    setSaving(true);
-    const { error } = await updateConfig(geofenceForm);
-    
-    if (error) {
-      toast.error(mapGenericActionError(error, 'No se pudo completar la operación.'));
-    } else {
-      toast.success('Configuración de geofence guardada');
-    }
-    setSaving(false);
-  };
 
   type ScheduleUpdateData = ComponentProps<typeof DepartmentScheduleCard>['onSave'] extends (departmentId: string, data: infer T) => Promise<{ error: string | null }> ? T : never;
 
@@ -131,7 +121,7 @@ export default function Configuration() {
     return { error };
   };
 
-  const fetchWorkLocations = async () => {
+  const fetchWorkLocations = useCallback(async () => {
     const { data, error } = await supabase
       .from('work_locations')
       .select('*')
@@ -142,12 +132,44 @@ export default function Configuration() {
       return;
     }
 
-    setWorkLocations((data || []) as WorkLocation[]);
-  };
+    const currentLocations = (data || []) as WorkLocation[];
+
+    if (config) {
+      const hasEquivalentLocation = currentLocations.some((item) =>
+        item.center_lat === config.center_lat &&
+        item.center_lng === config.center_lng &&
+        item.radius_meters === config.radius_meters &&
+        item.accuracy_threshold === config.accuracy_threshold
+      );
+
+      if (!hasEquivalentLocation) {
+        const { error: createLegacyError } = await supabase.from('work_locations').insert({
+          name: 'Ubicación base',
+          center_lat: config.center_lat,
+          center_lng: config.center_lng,
+          radius_meters: config.radius_meters,
+          accuracy_threshold: config.accuracy_threshold,
+          block_on_poor_accuracy: config.block_on_poor_accuracy,
+          is_active: true,
+        });
+
+        if (!createLegacyError) {
+          const { data: refreshedData } = await supabase
+            .from('work_locations')
+            .select('*')
+            .order('name', { ascending: true });
+          setWorkLocations((refreshedData || []) as WorkLocation[]);
+          return;
+        }
+      }
+    }
+
+    setWorkLocations(currentLocations);
+  }, [config]);
 
   useEffect(() => {
-    fetchWorkLocations();
-  }, []);
+    void fetchWorkLocations();
+  }, [fetchWorkLocations]);
 
   const handleCreateWorkLocation = async () => {
     if (!newLocation.name.trim()) {
@@ -245,6 +267,14 @@ export default function Configuration() {
           .from('app_config')
           .update({ value: generalConfig.vacationDaysPerWorkedDay })
           .eq('key', 'vacation_days_per_worked_day'),
+        supabase
+          .from('app_config')
+          .update({ value: generalConfig.globalTimezone })
+          .eq('key', 'global_timezone'),
+        supabase
+          .from('app_config')
+          .update({ value: Math.max(1, Math.round(generalConfig.restDaysMinSeparation)) })
+          .eq('key', 'rest_days_min_separation'),
       ];
 
       const results = await Promise.all(updates);
@@ -252,6 +282,16 @@ export default function Configuration() {
 
       if (failed?.error) {
         toast.error(mapGenericActionError(failed.error, 'No se pudo guardar la configuración general.'));
+        return;
+      }
+
+      const { error: scheduleTimezoneError } = await supabase
+        .from('department_schedules')
+        .update({ timezone: generalConfig.globalTimezone })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      if (scheduleTimezoneError) {
+        toast.error(mapGenericActionError(scheduleTimezoneError, 'Se guardó la zona horaria global pero no se pudo sincronizar en los departamentos.'));
         return;
       }
 
@@ -349,6 +389,8 @@ export default function Configuration() {
     }
   };
 
+  const locationForm = editingLocation ?? newLocation;
+
   if (loading) {
     return (
       <AppLayout>
@@ -428,105 +470,13 @@ export default function Configuration() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <MapPin className="h-5 w-5" />
-                  Configuración de Geofence
+                  Ubicaciones de trabajo
                 </CardTitle>
-                <CardDescription>
-                  Define la zona permitida para marcar asistencia
-                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="lat">Latitud del centro</Label>
-                    <Input
-                      id="lat"
-                      type="number"
-                      step="0.000001"
-                      value={geofenceForm.center_lat}
-                      onChange={(e) =>
-                        setGeofenceForm((p) => ({
-                          ...p,
-                          center_lat: parseFloat(e.target.value),
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lng">Longitud del centro</Label>
-                    <Input
-                      id="lng"
-                      type="number"
-                      step="0.000001"
-                      value={geofenceForm.center_lng}
-                      onChange={(e) =>
-                        setGeofenceForm((p) => ({
-                          ...p,
-                          center_lng: parseFloat(e.target.value),
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="radius">Radio permitido (metros)</Label>
-                    <Input
-                      id="radius"
-                      type="number"
-                      value={geofenceForm.radius_meters}
-                      onChange={(e) =>
-                        setGeofenceForm((p) => ({
-                          ...p,
-                          radius_meters: parseInt(e.target.value),
-                        }))
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Los empleados deben estar dentro de este radio para marcar
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="accuracy">Umbral de precisión GPS (metros)</Label>
-                    <Input
-                      id="accuracy"
-                      type="number"
-                      value={geofenceForm.accuracy_threshold}
-                      onChange={(e) =>
-                        setGeofenceForm((p) => ({
-                          ...p,
-                          accuracy_threshold: parseInt(e.target.value),
-                        }))
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Precisión mínima aceptable del GPS
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary">
-                  <div>
-                    <p className="font-medium">Bloquear con precisión baja</p>
-                    <p className="text-sm text-muted-foreground">
-                      Impide marcar si la precisión GPS es mayor al umbral
-                    </p>
-                  </div>
-                  <Switch
-                    checked={geofenceForm.block_on_poor_accuracy}
-                    onCheckedChange={(checked) =>
-                      setGeofenceForm((p) => ({
-                        ...p,
-                        block_on_poor_accuracy: checked,
-                      }))
-                    }
-                  />
-                </div>
-
-
+              <CardContent>
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base">Ubicaciones de trabajo</CardTitle>
+                    <CardTitle className="text-base">Listado de ubicaciones</CardTitle>
                     <CardDescription>Administra sedes activas e inactivas, crea nuevas ubicaciones y edita las existentes.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -560,7 +510,7 @@ export default function Configuration() {
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Input
                           placeholder="Nombre de ubicación"
-                          value={editingLocation ? editingLocation.name : newLocation.name}
+                          value={locationForm.name}
                           onChange={(e) =>
                             editingLocation
                               ? setEditingLocation((prev) => (prev ? { ...prev, name: e.target.value } : prev))
@@ -569,37 +519,37 @@ export default function Configuration() {
                         />
                         <Input
                           type="number"
-                          step="0.000001"
-                          placeholder="Latitud"
-                          value={editingLocation ? editingLocation.center_lat : newLocation.center_lat}
-                          onChange={(e) =>
-                            editingLocation
-                              ? setEditingLocation((prev) => (prev ? { ...prev, center_lat: parseFloat(e.target.value) } : prev))
-                              : setNewLocation((p) => ({ ...p, center_lat: parseFloat(e.target.value) }))
-                          }
-                        />
-                        <Input
-                          type="number"
-                          step="0.000001"
-                          placeholder="Longitud"
-                          value={editingLocation ? editingLocation.center_lng : newLocation.center_lng}
-                          onChange={(e) =>
-                            editingLocation
-                              ? setEditingLocation((prev) => (prev ? { ...prev, center_lng: parseFloat(e.target.value) } : prev))
-                              : setNewLocation((p) => ({ ...p, center_lng: parseFloat(e.target.value) }))
-                          }
-                        />
-                        <Input
-                          type="number"
                           placeholder="Radio (m)"
-                          value={editingLocation ? editingLocation.radius_meters : newLocation.radius_meters}
+                          value={locationForm.radius_meters}
                           onChange={(e) =>
                             editingLocation
-                              ? setEditingLocation((prev) => (prev ? { ...prev, radius_meters: parseInt(e.target.value, 10) } : prev))
-                              : setNewLocation((p) => ({ ...p, radius_meters: parseInt(e.target.value, 10) }))
+                              ? setEditingLocation((prev) => (prev ? { ...prev, radius_meters: parseInt(e.target.value, 10) || 0 } : prev))
+                              : setNewLocation((p) => ({ ...p, radius_meters: parseInt(e.target.value, 10) || 0 }))
+                          }
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Precisión GPS (m)"
+                          value={locationForm.accuracy_threshold}
+                          onChange={(e) =>
+                            editingLocation
+                              ? setEditingLocation((prev) => (prev ? { ...prev, accuracy_threshold: parseInt(e.target.value, 10) || 0 } : prev))
+                              : setNewLocation((p) => ({ ...p, accuracy_threshold: parseInt(e.target.value, 10) || 0 }))
                           }
                         />
                       </div>
+
+                      <LocationMapPicker
+                        latitude={locationForm.center_lat}
+                        longitude={locationForm.center_lng}
+                        radiusMeters={locationForm.radius_meters}
+                        onChange={({ lat, lng }) =>
+                          editingLocation
+                            ? setEditingLocation((prev) => (prev ? { ...prev, center_lat: Number(lat.toFixed(6)), center_lng: Number(lng.toFixed(6)) } : prev))
+                            : setNewLocation((p) => ({ ...p, center_lat: Number(lat.toFixed(6)), center_lng: Number(lng.toFixed(6)) }))
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">Lat {locationForm.center_lat} · Lng {locationForm.center_lng}</p>
                       <div className="flex items-center justify-between rounded-md bg-secondary/40 px-3 py-2">
                         <div>
                           <p className="text-sm font-medium">Ubicación activa</p>
@@ -615,6 +565,21 @@ export default function Configuration() {
                           disabled={!editingLocation}
                         />
                       </div>
+                      <div className="flex items-center justify-between rounded-md bg-secondary/40 px-3 py-2">
+                        <div>
+                          <p className="text-sm font-medium">Bloquear por baja precisión</p>
+                          <p className="text-xs text-muted-foreground">Rechaza marcajes con GPS impreciso en esta locación.</p>
+                        </div>
+                        <Switch
+                          checked={locationForm.block_on_poor_accuracy}
+                          onCheckedChange={(checked) =>
+                            editingLocation
+                              ? setEditingLocation((prev) => (prev ? { ...prev, block_on_poor_accuracy: checked } : prev))
+                              : setNewLocation((p) => ({ ...p, block_on_poor_accuracy: checked }))
+                          }
+                        />
+                      </div>
+
                       <div className="flex gap-2">
                         {editingLocation ? (
                           <>
@@ -636,25 +601,11 @@ export default function Configuration() {
                     </div>
                   </CardContent>
                 </Card>
-
-                <Button onClick={handleSaveGeofence} disabled={saving} className="w-full">
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Guardar configuración
-                    </>
-                  )}
-                </Button>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* General Tab */}
+
           <TabsContent value="general">
             <Card>
               <CardHeader>
@@ -666,7 +617,7 @@ export default function Configuration() {
                   Ajustes globales del sistema
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-4 rounded-lg bg-secondary">
                   <div>
                     <p className="font-medium">Incluir jefes en reportes globales</p>
@@ -682,8 +633,31 @@ export default function Configuration() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Tolerancia de tardanza (minutos)</Label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Zona horaria global</Label>
+                  <Select
+                    value={generalConfig.globalTimezone}
+                    onValueChange={(value) => setGeneralConfig((prev) => ({ ...prev, globalTimezone: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona zona horaria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIMEZONE_OPTIONS.map((timezone) => (
+                        <SelectItem key={timezone.value} value={timezone.value}>
+                          {timezone.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Se aplica para todos los departamentos y centraliza el cálculo de tardanzas/ventanas.
+                  </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Tolerancia de tardanza (minutos)</Label>
                   <Input
                     type="number"
                     min={0}
@@ -698,10 +672,10 @@ export default function Configuration() {
                   <p className="text-xs text-muted-foreground">
                     Minutos después de la hora de entrada que se consideran tardanza
                   </p>
-                </div>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>Acumulación de vacaciones por día trabajado</Label>
+                  <div className="space-y-2">
+                    <Label>Acumulación de vacaciones por día trabajado</Label>
                   <Input
                     type="number"
                     min={0}
@@ -717,9 +691,28 @@ export default function Configuration() {
                   <p className="text-xs text-muted-foreground">
                     Ejemplo: 0.0833 ≈ 1 día de vacaciones acumulado cada 12 días trabajados.
                   </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Separación mínima entre días de descanso</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={generalConfig.restDaysMinSeparation}
+                    onChange={(e) =>
+                      setGeneralConfig((prev) => ({
+                        ...prev,
+                        restDaysMinSeparation: Number.parseInt(e.target.value || '1', 10),
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Define cuántos días de separación mínima habrá entre descansos semanales (parametrizable por centro de trabajo).
+                  </p>
+                  </div>
                 </div>
 
-                <Button className="w-full" onClick={handleSaveGeneral} disabled={savingGeneral}>
+                <Button className="w-full md:w-auto" onClick={handleSaveGeneral} disabled={savingGeneral}>
                   {savingGeneral ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
