@@ -83,18 +83,30 @@ async function isLateCheckin(
 ): Promise<boolean> {
   if (!departmentId) return false;
 
-  const { data, error } = await supabaseAdmin
-    .from('department_schedules')
-    .select('checkin_end_time, timezone')
-    .eq('department_id', departmentId)
-    .single<CheckinConfig>();
+  const [{ data: scheduleData, error: scheduleError }, { data: timezoneConfig }] = await Promise.all([
+    supabaseAdmin
+      .from('department_schedules')
+      .select('checkin_end_time, timezone')
+      .eq('department_id', departmentId)
+      .single<CheckinConfig>(),
+    supabaseAdmin
+      .from('app_config')
+      .select('value')
+      .eq('key', 'global_timezone')
+      .maybeSingle(),
+  ]);
 
-  if (error || !data?.checkin_end_time) {
+  if (scheduleError || !scheduleData?.checkin_end_time) {
     return false;
   }
 
-  const checkinEndSeconds = parseTimeToSeconds(data.checkin_end_time);
-  const currentSeconds = getCurrentSecondsInTimezone(data.timezone || 'UTC');
+  const globalTimezone = typeof timezoneConfig?.value === 'string'
+    ? timezoneConfig.value
+    : null;
+
+  const timezone = globalTimezone || scheduleData.timezone || 'UTC';
+  const checkinEndSeconds = parseTimeToSeconds(scheduleData.checkin_end_time);
+  const currentSeconds = getCurrentSecondsInTimezone(timezone);
 
   return currentSeconds > checkinEndSeconds;
 }
