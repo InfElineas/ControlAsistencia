@@ -65,6 +65,50 @@ export function useDepartmentSchedules() {
     fetchSchedules();
   }, []);
 
+
+  const notifyDepartmentCheckinChange = async (
+    departmentId: string,
+    departmentName: string,
+    previousCheckinStart: string | null,
+    nextCheckinStart: string
+  ) => {
+    const { data: memberProfiles, error: membersError } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('department_id', departmentId);
+
+    if (membersError) {
+      throw membersError;
+    }
+
+    if (!memberProfiles || memberProfiles.length === 0) {
+      return;
+    }
+
+    const message = previousCheckinStart
+      ? `Tu horario de entrada cambió de ${previousCheckinStart.slice(0, 5)} a ${nextCheckinStart.slice(0, 5)} en ${departmentName}.`
+      : `Se definió tu horario de entrada a las ${nextCheckinStart.slice(0, 5)} en ${departmentName}.`;
+
+    const notificationsPayload = memberProfiles.map((member) => ({
+      user_id: member.user_id,
+      title: 'Horario de entrada actualizado',
+      message,
+      type: 'info' as const,
+      link: '/attendance',
+      metadata: {
+        category: 'department_schedule',
+        department_id: departmentId,
+        previous_checkin_start_time: previousCheckinStart,
+        checkin_start_time: nextCheckinStart,
+      },
+    }));
+
+    const { error: notifyError } = await supabase.from('notifications').insert(notificationsPayload);
+    if (notifyError) {
+      throw notifyError;
+    }
+  };
+
   const updateSchedule = async (
     departmentId: string,
     scheduleData: {
@@ -79,7 +123,8 @@ export function useDepartmentSchedules() {
   ) => {
     try {
       // Check if schedule exists
-      const existing = departmentsWithSchedules.find((d) => d.id === departmentId)?.schedule;
+      const department = departmentsWithSchedules.find((d) => d.id === departmentId) ?? null;
+      const existing = department?.schedule ?? null;
 
       if (existing) {
         // Update
@@ -104,6 +149,15 @@ export function useDepartmentSchedules() {
         if (error) throw error;
       }
 
+      if (!existing || existing.checkin_start_time !== scheduleData.checkin_start_time) {
+        await notifyDepartmentCheckinChange(
+          departmentId,
+          department?.name ?? 'tu departamento',
+          existing?.checkin_start_time ?? null,
+          scheduleData.checkin_start_time
+        );
+      }
+
       await fetchSchedules();
       return { error: null };
     } catch (err: unknown) {
@@ -117,7 +171,6 @@ export function useDepartmentSchedules() {
         .from('departments')
         .update({
           is_paused: isPaused,
-          updated_at: new Date().toISOString(),
         })
         .eq('id', departmentId);
 
