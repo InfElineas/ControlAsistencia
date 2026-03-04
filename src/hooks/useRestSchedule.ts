@@ -160,10 +160,10 @@ export function useRestSchedule(targetUserId?: string | null) {
         const wrapDistance = 7 - directDistance;
         const minDistance = Math.min(directDistance, wrapDistance);
 
-        if (minDistance < 3) {
+        if (minDistance < 4) {
           return {
             valid: false,
-            error: 'Los días de descanso deben tener al menos 3 días de separación entre ellos',
+            error: 'Los días de descanso deben tener al menos 3 días de trabajo entre ellos (4 días de separación)',
           };
         }
       }
