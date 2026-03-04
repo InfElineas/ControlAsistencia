@@ -21,11 +21,14 @@ export function useWorkLocations() {
   const { user } = useAuth();
   const [locations, setLocations] = useState<WorkLocation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [storageReady, setStorageReady] = useState(false);
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
 
   useEffect(() => {
+    setStorageReady(false);
     const key = getStorageKey(user?.id);
     setActiveLocationId(localStorage.getItem(key));
+    setStorageReady(true);
 
     const handleStorageSync = () => {
       setActiveLocationId(localStorage.getItem(key));
@@ -73,7 +76,6 @@ export function useWorkLocations() {
     window.dispatchEvent(new Event('work-location-changed'));
   }, [user?.id]);
 
-
   useEffect(() => {
     if (!activeLocationId) return;
     if (locations.some((location) => location.id === activeLocationId)) return;
@@ -83,6 +85,7 @@ export function useWorkLocations() {
   return {
     locations,
     loading,
+    storageReady,
     activeLocationId,
     setActiveLocation,
     clearActiveLocation,
