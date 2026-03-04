@@ -19,6 +19,20 @@ import { useUIMode } from '@/hooks/use-ui-mode';
 import { EmployeeMarkPage } from '@/pages/employee/EmployeeMarkPage';
 import { useWorkLocations } from '@/hooks/useWorkLocations';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
+
+type CheckoutMode = 'manual' | 'schedule' | 'geofence_exit';
+
+const parseTimeToSeconds = (time: string): number => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 3600 + minutes * 60;
+};
+
+const getCurrentTimeInTimezone = (timezone: string): string =>
+  new Date().toLocaleTimeString('en-GB', {
+    timeZone: timezone,
+    hour12: false,
+  });
 
 export default function Attendance() {
   const { profile } = useAuth();
@@ -59,10 +73,53 @@ export default function Attendance() {
     distance: number;
     accuracyOk: boolean;
   } | null>(null);
+  const [checkoutMode, setCheckoutMode] = useState<CheckoutMode>('schedule');
+  const [autoCheckoutTime, setAutoCheckoutTime] = useState<string | null>(null);
+  const [outsideGraceMinutes, setOutsideGraceMinutes] = useState<number>(3);
+  const [globalTimezone, setGlobalTimezone] = useState<string | null>(null);
+  const [checkoutConfigLoading, setCheckoutConfigLoading] = useState(true);
 
   const autoMarkingRef = useRef(false);
+  const outsideSinceRef = useRef<number | null>(null);
   const lastAutoReasonRef = useRef<string | null>(null);
   const previousInsideRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const fetchCheckoutConfig = async () => {
+      setCheckoutConfigLoading(true);
+      const { data, error } = await supabase
+        .from('app_config')
+        .select('key, value')
+        .in('key', ['attendance_checkout_mode', 'attendance_auto_checkout_time', 'attendance_geofence_exit_minutes', 'global_timezone']);
+
+      if (!error && data) {
+        const modeValue = data.find((item) => item.key === 'attendance_checkout_mode')?.value;
+        const timeValue = data.find((item) => item.key === 'attendance_auto_checkout_time')?.value;
+        const minutesValue = data.find((item) => item.key === 'attendance_geofence_exit_minutes')?.value;
+        const globalTimezoneValue = data.find((item) => item.key === 'global_timezone')?.value;
+
+        if (modeValue === 'manual' || modeValue === 'schedule' || modeValue === 'geofence_exit') {
+          setCheckoutMode(modeValue);
+        }
+
+        if (typeof timeValue === 'string' && /^\d{2}:\d{2}/.test(timeValue)) {
+          setAutoCheckoutTime(timeValue.slice(0, 5));
+        }
+
+        if (typeof minutesValue === 'number' && Number.isFinite(minutesValue)) {
+          setOutsideGraceMinutes(Math.max(0, Math.round(minutesValue)));
+        }
+
+        if (typeof globalTimezoneValue === 'string' && globalTimezoneValue.trim().length > 0) {
+          setGlobalTimezone(globalTimezoneValue);
+        }
+      }
+
+      setCheckoutConfigLoading(false);
+    };
+
+    void fetchCheckoutConfig();
+  }, []);
 
   // Check geofence when location updates
   useEffect(() => {
@@ -187,34 +244,60 @@ export default function Attendance() {
   };
 
   useEffect(() => {
-    if (isGlobalManager || isRest || !canMarkOut) {
+    if (checkoutMode !== 'geofence_exit' || isGlobalManager || isRest || !canMarkOut) {
       previousInsideRef.current = geofenceResult?.isInside ?? null;
+      outsideSinceRef.current = null;
       return;
     }
 
-    const previousInside = previousInsideRef.current;
     const currentInside = geofenceResult?.isInside ?? null;
+    const now = Date.now();
 
-    if (
-      previousInside === true &&
-      currentInside === false &&
-      lastAutoReasonRef.current !== 'GEOFENCE_EXIT'
-    ) {
-      void autoMarkOut('GEOFENCE_EXIT');
+    if (currentInside === false) {
+      if (outsideSinceRef.current === null) {
+        outsideSinceRef.current = now;
+      }
+
+      const elapsedMinutes = (now - outsideSinceRef.current) / 60_000;
+      if (elapsedMinutes >= outsideGraceMinutes && lastAutoReasonRef.current !== 'GEOFENCE_EXIT') {
+        void autoMarkOut('GEOFENCE_EXIT');
+      }
+    } else {
+      outsideSinceRef.current = null;
     }
 
     previousInsideRef.current = currentInside;
-  }, [autoMarkOut, canMarkOut, geofenceResult?.isInside, isGlobalManager, isRest]);
+  }, [autoMarkOut, canMarkOut, checkoutMode, geofenceResult?.isInside, isGlobalManager, isRest, outsideGraceMinutes]);
 
   useEffect(() => {
-    if (isGlobalManager || isRest || !canMarkOut) return;
+    if (checkoutMode !== 'schedule' || isGlobalManager || isRest || !canMarkOut) return;
 
-    if (hasReachedCheckoutTime() && lastAutoReasonRef.current !== 'SCHEDULE') {
+    const reachedCheckoutByMode = (() => {
+      if (!schedule) return false;
+      const effectiveTimezone = globalTimezone || schedule.timezone;
+      if (autoCheckoutTime) {
+        const currentSeconds = parseTimeToSeconds(getCurrentTimeInTimezone(effectiveTimezone));
+        return currentSeconds >= parseTimeToSeconds(autoCheckoutTime);
+      }
+      return hasReachedCheckoutTime();
+    })();
+
+    if (reachedCheckoutByMode && lastAutoReasonRef.current !== 'SCHEDULE') {
       void autoMarkOut('SCHEDULE');
     }
 
     const interval = window.setInterval(() => {
-      if (hasReachedCheckoutTime() && !autoMarkingRef.current && lastAutoReasonRef.current !== 'SCHEDULE') {
+      const reachedByInterval = (() => {
+        if (!schedule) return false;
+        const effectiveTimezone = globalTimezone || schedule.timezone;
+        if (autoCheckoutTime) {
+          const currentSeconds = parseTimeToSeconds(getCurrentTimeInTimezone(effectiveTimezone));
+          return currentSeconds >= parseTimeToSeconds(autoCheckoutTime);
+        }
+        return hasReachedCheckoutTime();
+      })();
+
+      if (reachedByInterval && !autoMarkingRef.current && lastAutoReasonRef.current !== 'SCHEDULE') {
         void autoMarkOut('SCHEDULE');
       }
     }, 60_000);
@@ -222,10 +305,14 @@ export default function Attendance() {
     return () => window.clearInterval(interval);
   }, [
     autoMarkOut,
+    autoCheckoutTime,
     canMarkOut,
+    checkoutMode,
+    globalTimezone,
     hasReachedCheckoutTime,
     isGlobalManager,
     isRest,
+    schedule,
     schedule?.checkout_start_time,
     schedule?.timezone,
   ]);
@@ -244,10 +331,11 @@ export default function Attendance() {
     if (!canMarkOut) {
       lastAutoReasonRef.current = null;
       previousInsideRef.current = geofenceResult?.isInside ?? null;
+      outsideSinceRef.current = null;
     }
   }, [canMarkOut, geofenceResult?.isInside]);
 
-  const isLoading = configLoading || gmLoading || scheduleLoading;
+  const isLoading = configLoading || gmLoading || scheduleLoading || checkoutConfigLoading;
 
   if (uiMode === 'employee') {
     return (

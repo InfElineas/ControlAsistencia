@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { AlertTriangle, Database, FileSpreadsheet, KeyRound, Play, RefreshCcw, ShieldCheck, Trash2, Users, Wrench } from 'lucide-react';
 import { getHighestRole } from '@/lib/roles';
@@ -39,6 +40,9 @@ type Stats = {
   totalGlobalManagerChanges: number;
   uniqueIps: number;
 };
+
+
+type CheckoutMode = 'manual' | 'schedule' | 'geofence_exit';
 
 type SqlConsoleResult = {
   type: 'select' | 'command';
@@ -74,6 +78,10 @@ export default function SuperAdmin() {
   const [importFileName, setImportFileName] = useState('');
   const [importingHistory, setImportingHistory] = useState(false);
   const [importSummary, setImportSummary] = useState<{ imported_marks: number; missing_emails: string[] } | null>(null);
+  const [checkoutMode, setCheckoutMode] = useState<CheckoutMode>('schedule');
+  const [autoCheckoutTime, setAutoCheckoutTime] = useState('18:30');
+  const [geofenceExitMinutes, setGeofenceExitMinutes] = useState(3);
+  const [savingCheckoutSettings, setSavingCheckoutSettings] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -82,6 +90,7 @@ export default function SuperAdmin() {
         { data: logData, error: logError, count: totalLogs },
         { data: profileData, error: profileError, count: totalUsers },
         { data: roleData, error: rolesError },
+        { data: appConfigData, error: appConfigError },
       ] = await Promise.all([
         supabase
           .from('audit_log')
@@ -90,11 +99,16 @@ export default function SuperAdmin() {
           .limit(200),
         supabase.from('profiles').select('user_id, full_name, email', { count: 'exact' }).order('full_name', { ascending: true }),
         supabase.from('user_roles').select('user_id, role'),
+        supabase
+          .from('app_config')
+          .select('key, value')
+          .in('key', ['attendance_checkout_mode', 'attendance_auto_checkout_time', 'attendance_geofence_exit_minutes']),
       ]);
 
       if (logError) throw logError;
       if (profileError) throw profileError;
       if (rolesError) throw rolesError;
+      if (appConfigError) throw appConfigError;
 
       const castedLogs = (logData ?? []) as AuditLog[];
       const rolesByUser = (roleData ?? []).reduce<Record<string, string[]>>((acc, item) => {
@@ -121,6 +135,20 @@ export default function SuperAdmin() {
       }).length;
 
       const uniqueIps = new Set(castedLogs.map((item) => item.source_ip).filter(Boolean)).size;
+
+      const modeValue = appConfigData?.find((item) => item.key === 'attendance_checkout_mode')?.value;
+      const timeValue = appConfigData?.find((item) => item.key === 'attendance_auto_checkout_time')?.value;
+      const minutesValue = appConfigData?.find((item) => item.key === 'attendance_geofence_exit_minutes')?.value;
+
+      if (modeValue === 'manual' || modeValue === 'schedule' || modeValue === 'geofence_exit') {
+        setCheckoutMode(modeValue);
+      }
+      if (typeof timeValue === 'string' && /^\d{2}:\d{2}$/.test(timeValue)) {
+        setAutoCheckoutTime(timeValue);
+      }
+      if (typeof minutesValue === 'number' && Number.isFinite(minutesValue)) {
+        setGeofenceExitMinutes(Math.max(0, Math.round(minutesValue)));
+      }
 
       setLogs(castedLogs);
       setUsers(usersData);
@@ -306,6 +334,55 @@ export default function SuperAdmin() {
     }
   };
 
+
+  const saveCheckoutSettings = async () => {
+    try {
+      setSavingCheckoutSettings(true);
+
+      const normalizedMinutes = Math.max(0, Math.round(geofenceExitMinutes));
+      const normalizedTime = /^\d{2}:\d{2}$/.test(autoCheckoutTime) ? autoCheckoutTime : '18:30';
+
+      const { error } = await supabase
+        .from('app_config')
+        .upsert([
+          {
+            key: 'attendance_checkout_mode',
+            value: checkoutMode,
+            description: 'Modo de salida de asistencia: manual, schedule o geofence_exit',
+          },
+          {
+            key: 'attendance_auto_checkout_time',
+            value: normalizedTime,
+            description: 'Hora de salida automática cuando el modo es schedule (HH:mm)',
+          },
+          {
+            key: 'attendance_geofence_exit_minutes',
+            value: normalizedMinutes,
+            description: 'Minutos continuos fuera de la zona para salida automática por geofence',
+          },
+        ], { onConflict: 'key' });
+
+      if (error) throw error;
+
+      setGeofenceExitMinutes(normalizedMinutes);
+      setAutoCheckoutTime(normalizedTime);
+
+      toast({
+        title: 'Configuración guardada',
+        description: 'Se actualizó el modo de salida y los parámetros automáticos.',
+      });
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: 'Error',
+        description: 'No se pudo guardar la configuración de salida.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingCheckoutSettings(false);
+    }
+  };
+
   const deleteUser = async (targetUserId: string) => {
     if (targetUserId === user?.id) {
       toast({ title: 'Operación bloqueada', description: 'No puedes eliminar tu propio usuario.', variant: 'destructive' });
@@ -358,6 +435,59 @@ export default function SuperAdmin() {
           <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">IPs únicas</p><p className="text-xl font-semibold">{stats.uniqueIps}</p></CardContent></Card>
           <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Cambios por gestores</p><p className="text-xl font-semibold">{stats.totalGlobalManagerChanges}</p></CardContent></Card>
         </div>
+
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2"><Wrench className="h-4 w-4" /> Modo de salida configurable</CardTitle>
+            <CardDescription>Define cómo se registra la salida para todo el sistema.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Modo de salida</p>
+              <Select value={checkoutMode} onValueChange={(value: CheckoutMode) => setCheckoutMode(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona modo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual por usuario</SelectItem>
+                  <SelectItem value="schedule">Automática por horario</SelectItem>
+                  <SelectItem value="geofence_exit">Automática por salida de zona</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Hora de salida automática</p>
+              <Input
+                type="time"
+                value={autoCheckoutTime}
+                onChange={(event) => setAutoCheckoutTime(event.target.value)}
+                disabled={checkoutMode !== 'schedule'}
+              />
+              <p className="text-xs text-muted-foreground">Aplica cuando el modo es automática por horario.</p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Minutos fuera de zona</p>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={geofenceExitMinutes}
+                onChange={(event) => setGeofenceExitMinutes(Number(event.target.value || 0))}
+                disabled={checkoutMode !== 'geofence_exit'}
+              />
+              <p className="text-xs text-muted-foreground">Tiempo continuo fuera de geofence antes de marcar salida.</p>
+            </div>
+
+            <div className="md:col-span-3 flex justify-end">
+              <Button onClick={saveCheckoutSettings} disabled={savingCheckoutSettings}>
+                {savingCheckoutSettings ? 'Guardando...' : 'Guardar modo de salida'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <Card>
