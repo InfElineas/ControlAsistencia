@@ -465,9 +465,6 @@ export default function Configuration() {
                   <MapPin className="h-5 w-5" />
                   Ubicaciones de trabajo
                 </CardTitle>
-                <CardDescription>
-                  Se eliminó la configuración geofence duplicada. Ahora toda ubicación válida se administra aquí.
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 <Card>

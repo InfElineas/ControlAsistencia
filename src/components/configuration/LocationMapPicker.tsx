@@ -11,7 +11,7 @@ interface LocationMapPickerProps {
 
 const TILE_SIZE = 256;
 const ZOOM = 15;
-const GRID = [-1, 0, 1];
+const GRID = [-2, -1, 0, 1, 2];
 
 function lngToTileX(lng: number, zoom: number) {
   return ((lng + 180) / 360) * 2 ** zoom;
