@@ -84,42 +84,64 @@ export default function Attendance() {
   const lastAutoReasonRef = useRef<string | null>(null);
   const previousInsideRef = useRef<boolean | null>(null);
 
-  useEffect(() => {
-    const fetchCheckoutConfig = async () => {
+  const fetchCheckoutConfig = useCallback(async (showLoading = false) => {
+    if (showLoading) {
       setCheckoutConfigLoading(true);
-      const { data, error } = await supabase
-        .from('app_config')
-        .select('key, value')
-        .in('key', ['attendance_checkout_mode', 'attendance_auto_checkout_time', 'attendance_geofence_exit_minutes', 'global_timezone']);
+    }
 
-      if (!error && data) {
-        const modeValue = data.find((item) => item.key === 'attendance_checkout_mode')?.value;
-        const timeValue = data.find((item) => item.key === 'attendance_auto_checkout_time')?.value;
-        const minutesValue = data.find((item) => item.key === 'attendance_geofence_exit_minutes')?.value;
-        const globalTimezoneValue = data.find((item) => item.key === 'global_timezone')?.value;
+    const { data, error } = await supabase
+      .from('app_config')
+      .select('key, value')
+      .in('key', ['attendance_checkout_mode', 'attendance_auto_checkout_time', 'attendance_geofence_exit_minutes', 'global_timezone']);
 
-        if (modeValue === 'manual' || modeValue === 'schedule' || modeValue === 'geofence_exit') {
-          setCheckoutMode(modeValue);
-        }
+    if (!error && data) {
+      const modeValue = data.find((item) => item.key === 'attendance_checkout_mode')?.value;
+      const timeValue = data.find((item) => item.key === 'attendance_auto_checkout_time')?.value;
+      const minutesValue = data.find((item) => item.key === 'attendance_geofence_exit_minutes')?.value;
+      const globalTimezoneValue = data.find((item) => item.key === 'global_timezone')?.value;
 
-        if (typeof timeValue === 'string' && /^\d{2}:\d{2}/.test(timeValue)) {
-          setAutoCheckoutTime(timeValue.slice(0, 5));
-        }
-
-        if (typeof minutesValue === 'number' && Number.isFinite(minutesValue)) {
-          setOutsideGraceMinutes(Math.max(0, Math.round(minutesValue)));
-        }
-
-        if (typeof globalTimezoneValue === 'string' && globalTimezoneValue.trim().length > 0) {
-          setGlobalTimezone(globalTimezoneValue);
-        }
+      if (modeValue === 'manual' || modeValue === 'schedule' || modeValue === 'geofence_exit') {
+        setCheckoutMode(modeValue);
       }
 
+      if (typeof timeValue === 'string' && /^\d{2}:\d{2}/.test(timeValue)) {
+        setAutoCheckoutTime(timeValue.slice(0, 5));
+      }
+
+      if (typeof minutesValue === 'number' && Number.isFinite(minutesValue)) {
+        setOutsideGraceMinutes(Math.max(0, Math.round(minutesValue)));
+      }
+
+      if (typeof globalTimezoneValue === 'string' && globalTimezoneValue.trim().length > 0) {
+        setGlobalTimezone(globalTimezoneValue);
+      }
+    }
+
+    if (showLoading) {
       setCheckoutConfigLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchCheckoutConfig(true);
+
+    const syncInterval = window.setInterval(() => {
+      void fetchCheckoutConfig(false);
+    }, 60_000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchCheckoutConfig(false);
+      }
     };
 
-    void fetchCheckoutConfig();
-  }, []);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      window.clearInterval(syncInterval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [fetchCheckoutConfig]);
 
   // Check geofence when location updates
   useEffect(() => {

@@ -411,55 +411,6 @@ export default function SuperAdmin() {
     }
   };
 
-
-  const saveCheckoutSettings = async () => {
-    try {
-      setSavingCheckoutSettings(true);
-
-      const normalizedMinutes = Math.max(0, Math.round(geofenceExitMinutes));
-      const normalizedTime = /^\d{2}:\d{2}$/.test(autoCheckoutTime) ? autoCheckoutTime : '18:30';
-
-      const { error } = await supabase
-        .from('app_config')
-        .upsert([
-          {
-            key: 'attendance_checkout_mode',
-            value: checkoutMode,
-            description: 'Modo de salida de asistencia: manual, schedule o geofence_exit',
-          },
-          {
-            key: 'attendance_auto_checkout_time',
-            value: normalizedTime,
-            description: 'Hora de salida automática cuando el modo es schedule (HH:mm)',
-          },
-          {
-            key: 'attendance_geofence_exit_minutes',
-            value: normalizedMinutes,
-            description: 'Minutos continuos fuera de la zona para salida automática por geofence',
-          },
-        ], { onConflict: 'key' });
-
-      if (error) throw error;
-
-      setGeofenceExitMinutes(normalizedMinutes);
-      setAutoCheckoutTime(normalizedTime);
-
-      toast({
-        title: 'Configuración guardada',
-        description: 'Se actualizó el modo de salida y los parámetros automáticos.',
-      });
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: 'Error',
-        description: 'No se pudo guardar la configuración de salida.',
-        variant: 'destructive',
-      });
-    } finally {
-      setSavingCheckoutSettings(false);
-    }
-  };
-
   const deleteUser = async (targetUserId: string) => {
     if (targetUserId === user?.id) {
       toast({ title: 'Operación bloqueada', description: 'No puedes eliminar tu propio usuario.', variant: 'destructive' });
