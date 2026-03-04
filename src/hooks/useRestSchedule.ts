@@ -157,10 +157,8 @@ export function useRestSchedule(targetUserId?: string | null) {
         const day2 = sortedDays[j];
 
         const directDistance = Math.abs(day2 - day1);
-        const wrapDistance = 7 - directDistance;
-        const minDistance = Math.min(directDistance, wrapDistance);
 
-        if (minDistance < 4) {
+        if (directDistance < 4) {
           return {
             valid: false,
             error: 'Los días de descanso deben tener al menos 3 días de trabajo entre ellos (4 días de separación)',
