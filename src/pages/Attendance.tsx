@@ -15,9 +15,28 @@ import { AlertCircle, Calendar, ShieldX, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapAttendanceError } from '@/lib/error-messages';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useUIMode } from '@/hooks/use-ui-mode';
+import { EmployeeMarkPage } from '@/pages/employee/EmployeeMarkPage';
+import { useWorkLocations } from '@/hooks/useWorkLocations';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
+
+type CheckoutMode = 'manual' | 'schedule' | 'geofence_exit';
+
+const parseTimeToSeconds = (time: string): number => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 3600 + minutes * 60;
+};
+
+const getCurrentTimeInTimezone = (timezone: string): string =>
+  new Date().toLocaleTimeString('en-GB', {
+    timeZone: timezone,
+    hour12: false,
+  });
 
 export default function Attendance() {
   const { profile } = useAuth();
+  const role = profile?.role ?? null;
   const { createNotification } = useNotifications();
   const { isRestDay } = useRestSchedule();
   const { config, loading: configLoading } = useGeofenceConfig();
@@ -46,6 +65,7 @@ export default function Attendance() {
     markAttendance,
   } = useAttendance();
 
+  const { locations, activeLocationId, setActiveLocation } = useWorkLocations();
   const uiMode = useUIMode(role);
   const [marking, setMarking] = useState(false);
   const [geofenceResult, setGeofenceResult] = useState<{
@@ -53,10 +73,53 @@ export default function Attendance() {
     distance: number;
     accuracyOk: boolean;
   } | null>(null);
+  const [checkoutMode, setCheckoutMode] = useState<CheckoutMode>('schedule');
+  const [autoCheckoutTime, setAutoCheckoutTime] = useState<string | null>(null);
+  const [outsideGraceMinutes, setOutsideGraceMinutes] = useState<number>(3);
+  const [globalTimezone, setGlobalTimezone] = useState<string | null>(null);
+  const [checkoutConfigLoading, setCheckoutConfigLoading] = useState(true);
 
   const autoMarkingRef = useRef(false);
+  const outsideSinceRef = useRef<number | null>(null);
   const lastAutoReasonRef = useRef<string | null>(null);
   const previousInsideRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const fetchCheckoutConfig = async () => {
+      setCheckoutConfigLoading(true);
+      const { data, error } = await supabase
+        .from('app_config')
+        .select('key, value')
+        .in('key', ['attendance_checkout_mode', 'attendance_auto_checkout_time', 'attendance_geofence_exit_minutes', 'global_timezone']);
+
+      if (!error && data) {
+        const modeValue = data.find((item) => item.key === 'attendance_checkout_mode')?.value;
+        const timeValue = data.find((item) => item.key === 'attendance_auto_checkout_time')?.value;
+        const minutesValue = data.find((item) => item.key === 'attendance_geofence_exit_minutes')?.value;
+        const globalTimezoneValue = data.find((item) => item.key === 'global_timezone')?.value;
+
+        if (modeValue === 'manual' || modeValue === 'schedule' || modeValue === 'geofence_exit') {
+          setCheckoutMode(modeValue);
+        }
+
+        if (typeof timeValue === 'string' && /^\d{2}:\d{2}/.test(timeValue)) {
+          setAutoCheckoutTime(timeValue.slice(0, 5));
+        }
+
+        if (typeof minutesValue === 'number' && Number.isFinite(minutesValue)) {
+          setOutsideGraceMinutes(Math.max(0, Math.round(minutesValue)));
+        }
+
+        if (typeof globalTimezoneValue === 'string' && globalTimezoneValue.trim().length > 0) {
+          setGlobalTimezone(globalTimezoneValue);
+        }
+      }
+
+      setCheckoutConfigLoading(false);
+    };
+
+    void fetchCheckoutConfig();
+  }, []);
 
   // Check geofence when location updates
   useEffect(() => {
@@ -80,11 +143,12 @@ export default function Attendance() {
   const isRest = isRestDay(today);
   const checkinCheck = isWithinCheckinWindow();
   
-  const canMarkInAction = !isGlobalManager && !isRest && Boolean(geofenceResult?.isInside) && canMarkIn;
-  const canMarkOutAction = !isGlobalManager && !isRest && canMarkOut;
+  const hasSelectedLocation = !isGlobalManager && locations.length > 0 ? Boolean(activeLocationId) : true;
+  const canMarkInAction = !isGlobalManager && !isRest && hasSelectedLocation && Boolean(geofenceResult?.isInside) && canMarkIn;
+  const canMarkOutAction = !isGlobalManager && !isRest && hasSelectedLocation && canMarkOut;
 
   const autoMarkOut = useCallback(async (reason: 'SCHEDULE' | 'GEOFENCE_EXIT') => {
-    if (isGlobalManager || isRest || !canMarkOut || autoMarkingRef.current) return;
+    if (isGlobalManager || isRest || !canMarkOut || autoMarkingRef.current || !activeLocationId) return;
 
     autoMarkingRef.current = true;
     setMarking(true);
@@ -95,6 +159,7 @@ export default function Attendance() {
       accuracy,
       distanceToCenter: geofenceResult?.distance ?? null,
       insideGeofence: geofenceResult?.isInside ?? false,
+      workLocationId: activeLocationId,
     });
 
     if (error) {
@@ -128,11 +193,18 @@ export default function Attendance() {
     accuracy,
     geofenceResult?.distance,
     geofenceResult?.isInside,
+    createNotification,
+    activeLocationId,
   ]);
 
   const handleMark = async (type: 'IN' | 'OUT') => {
     if (isGlobalManager) {
       toast.error('No autorizado para registrar asistencia o descansos');
+      return;
+    }
+
+    if (!activeLocationId) {
+      toast.error('Debes seleccionar una ubicación de trabajo antes de marcar asistencia');
       return;
     }
 
@@ -153,6 +225,7 @@ export default function Attendance() {
       accuracy,
       distanceToCenter: geofenceResult?.distance ?? null,
       insideGeofence: geofenceResult?.isInside ?? false,
+      workLocationId: activeLocationId,
     });
 
     if (error) {
@@ -171,40 +244,78 @@ export default function Attendance() {
   };
 
   useEffect(() => {
-    if (isGlobalManager || isRest || !canMarkOut) {
+    if (checkoutMode !== 'geofence_exit' || isGlobalManager || isRest || !canMarkOut) {
       previousInsideRef.current = geofenceResult?.isInside ?? null;
+      outsideSinceRef.current = null;
       return;
     }
 
-    const previousInside = previousInsideRef.current;
     const currentInside = geofenceResult?.isInside ?? null;
+    const now = Date.now();
 
-    if (
-      previousInside === true &&
-      currentInside === false &&
-      lastAutoReasonRef.current !== 'GEOFENCE_EXIT'
-    ) {
-      void autoMarkOut('GEOFENCE_EXIT');
+    if (currentInside === false) {
+      if (outsideSinceRef.current === null) {
+        outsideSinceRef.current = now;
+      }
+
+      const elapsedMinutes = (now - outsideSinceRef.current) / 60_000;
+      if (elapsedMinutes >= outsideGraceMinutes && lastAutoReasonRef.current !== 'GEOFENCE_EXIT') {
+        void autoMarkOut('GEOFENCE_EXIT');
+      }
+    } else {
+      outsideSinceRef.current = null;
     }
 
     previousInsideRef.current = currentInside;
-  }, [autoMarkOut, canMarkOut, geofenceResult?.isInside, isGlobalManager, isRest]);
+  }, [autoMarkOut, canMarkOut, checkoutMode, geofenceResult?.isInside, isGlobalManager, isRest, outsideGraceMinutes]);
 
   useEffect(() => {
-    if (isGlobalManager || isRest || !canMarkOut) return;
+    if (checkoutMode !== 'schedule' || isGlobalManager || isRest || !canMarkOut) return;
 
-    if (hasReachedCheckoutTime() && lastAutoReasonRef.current !== 'SCHEDULE') {
+    const reachedCheckoutByMode = (() => {
+      if (!schedule) return false;
+      const effectiveTimezone = globalTimezone || schedule.timezone;
+      if (autoCheckoutTime) {
+        const currentSeconds = parseTimeToSeconds(getCurrentTimeInTimezone(effectiveTimezone));
+        return currentSeconds >= parseTimeToSeconds(autoCheckoutTime);
+      }
+      return hasReachedCheckoutTime();
+    })();
+
+    if (reachedCheckoutByMode && lastAutoReasonRef.current !== 'SCHEDULE') {
       void autoMarkOut('SCHEDULE');
     }
 
     const interval = window.setInterval(() => {
-      if (hasReachedCheckoutTime() && !autoMarkingRef.current && lastAutoReasonRef.current !== 'SCHEDULE') {
+      const reachedByInterval = (() => {
+        if (!schedule) return false;
+        const effectiveTimezone = globalTimezone || schedule.timezone;
+        if (autoCheckoutTime) {
+          const currentSeconds = parseTimeToSeconds(getCurrentTimeInTimezone(effectiveTimezone));
+          return currentSeconds >= parseTimeToSeconds(autoCheckoutTime);
+        }
+        return hasReachedCheckoutTime();
+      })();
+
+      if (reachedByInterval && !autoMarkingRef.current && lastAutoReasonRef.current !== 'SCHEDULE') {
         void autoMarkOut('SCHEDULE');
       }
     }, 60_000);
 
     return () => window.clearInterval(interval);
-  }, [autoMarkOut, canMarkOut, isGlobalManager, isRest, schedule?.checkout_start_time, schedule?.timezone]);
+  }, [
+    autoMarkOut,
+    autoCheckoutTime,
+    canMarkOut,
+    checkoutMode,
+    globalTimezone,
+    hasReachedCheckoutTime,
+    isGlobalManager,
+    isRest,
+    schedule,
+    schedule?.checkout_start_time,
+    schedule?.timezone,
+  ]);
 
   useEffect(() => {
     if (isGlobalManager || isRest || !canMarkOut) return;
@@ -220,10 +331,11 @@ export default function Attendance() {
     if (!canMarkOut) {
       lastAutoReasonRef.current = null;
       previousInsideRef.current = geofenceResult?.isInside ?? null;
+      outsideSinceRef.current = null;
     }
   }, [canMarkOut, geofenceResult?.isInside]);
 
-  const isLoading = configLoading || gmLoading || scheduleLoading;
+  const isLoading = configLoading || gmLoading || scheduleLoading || checkoutConfigLoading;
 
   if (uiMode === 'employee') {
     return (
@@ -297,6 +409,28 @@ export default function Attendance() {
                 No es necesario marcar asistencia hoy
               </p>
             </div>
+          </div>
+        )}
+
+
+        {!isGlobalManager && locations.length > 0 && (
+          <div className="rounded-xl border p-4 space-y-2">
+            <p className="text-sm font-medium">Ubicación de trabajo para hoy</p>
+            <Select value={activeLocationId ?? ''} onValueChange={setActiveLocation}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona una ubicación" />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map((location) => (
+                  <SelectItem key={location.id} value={location.id}>
+                    {location.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!hasSelectedLocation && (
+              <p className="text-xs text-warning">Debes seleccionar una ubicación para habilitar el marcaje.</p>
+            )}
           </div>
         )}
 
