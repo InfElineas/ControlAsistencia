@@ -67,6 +67,17 @@ export function useGeofenceConfig() {
 
   useEffect(() => {
     fetchConfig();
+    const onLocationChanged = () => {
+      void fetchConfig();
+    };
+
+    window.addEventListener('work-location-changed', onLocationChanged);
+    window.addEventListener('storage', onLocationChanged);
+
+    return () => {
+      window.removeEventListener('work-location-changed', onLocationChanged);
+      window.removeEventListener('storage', onLocationChanged);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
