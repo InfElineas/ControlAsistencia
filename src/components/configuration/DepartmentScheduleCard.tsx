@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Save, Clock, Building2, PauseCircle, PlayCircle } from 'lucide-react';
+import { Loader2, Save, Clock, Building2 } from 'lucide-react';
 
 interface Schedule {
   id: string;
@@ -161,31 +161,19 @@ export function DepartmentScheduleCard({ departmentId, departmentName, isPaused,
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant={isPaused ? 'outline' : 'secondary'}
-          onClick={handleTogglePause}
-          disabled={togglingPause}
-          size="sm"
-          className="w-full"
-        >
+        <div className="flex items-center justify-between rounded-md bg-secondary/40 px-3 py-2">
+          <div>
+            <Label className="text-sm font-medium">Modo sin descanso por departamento</Label>
+            <p className="text-xs text-muted-foreground">
+              {isPaused ? 'Activado: no aplica descanso automático.' : 'Desactivado: usa reglas de descanso configuradas.'}
+            </p>
+          </div>
           {togglingPause ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Actualizando...
-            </>
-          ) : isPaused ? (
-            <>
-              <PlayCircle className="h-4 w-4 mr-2" />
-              Activar descanso por departamento
-            </>
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           ) : (
-            <>
-              <PauseCircle className="h-4 w-4 mr-2" />
-              Modo sin descanso por departamento
-            </>
+            <Switch checked={isPaused} onCheckedChange={() => void handleTogglePause()} />
           )}
-        </Button>
+        </div>
 
         <Button
           onClick={handleSave}

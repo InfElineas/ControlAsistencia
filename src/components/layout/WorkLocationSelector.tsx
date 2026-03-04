@@ -40,13 +40,6 @@ export function WorkLocationSelector() {
     setSelected('');
   }, [activeLocationId, locations]);
 
-
-  useEffect(() => {
-    if (!activeLocationId) return;
-    if (locations.some((item) => item.id === activeLocationId)) return;
-    setSelected('');
-  }, [activeLocationId, locations]);
-
   const onConfirm = () => {
     if (!selected) return;
     setActiveLocation(selected);
