@@ -117,7 +117,6 @@ export function useDepartmentSchedules() {
         .from('departments')
         .update({
           is_paused: isPaused,
-          updated_at: new Date().toISOString(),
         })
         .eq('id', departmentId);
 
