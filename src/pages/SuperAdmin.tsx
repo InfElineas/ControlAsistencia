@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { AlertTriangle, Database, FileSpreadsheet, KeyRound, Play, RefreshCcw, ShieldCheck, Trash2, Users, Wrench } from 'lucide-react';
+import { AlertTriangle, Database, FileSpreadsheet, Mail, Play, RefreshCcw, ShieldCheck, Trash2, Users, Wrench } from 'lucide-react';
 import { getHighestRole } from '@/lib/roles';
+import { resolveAuthRedirectUrl } from '@/lib/auth-redirect';
 import * as XLSX from 'xlsx';
 
 type AuditLog = {
@@ -40,6 +42,9 @@ type Stats = {
   uniqueIps: number;
 };
 
+
+type CheckoutMode = 'manual' | 'schedule' | 'geofence_exit';
+
 type SqlConsoleResult = {
   type: 'select' | 'command';
   row_count: number;
@@ -66,7 +71,6 @@ export default function SuperAdmin() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [stats, setStats] = useState<Stats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
-  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>({});
   const [accountActionUserId, setAccountActionUserId] = useState<string | null>(null);
   const [sqlQuery, setSqlQuery] = useState(INITIAL_SQL);
   const [runningSql, setRunningSql] = useState(false);
@@ -74,6 +78,27 @@ export default function SuperAdmin() {
   const [importFileName, setImportFileName] = useState('');
   const [importingHistory, setImportingHistory] = useState(false);
   const [importSummary, setImportSummary] = useState<{ imported_marks: number; missing_emails: string[] } | null>(null);
+  const [checkoutMode, setCheckoutMode] = useState<CheckoutMode>('schedule');
+  const [autoCheckoutTime, setAutoCheckoutTime] = useState('18:30');
+  const [geofenceExitMinutes, setGeofenceExitMinutes] = useState(3);
+  const [restDaysMinSeparation, setRestDaysMinSeparation] = useState(4);
+  const [savingCheckoutSettings, setSavingCheckoutSettings] = useState(false);
+
+  const logSystemError = useCallback(async (action: string, details: string, metadata?: Record<string, unknown>) => {
+    if (!user?.id) return;
+
+    try {
+      await supabase.from('audit_log').insert({
+        user_id: user.id,
+        action,
+        table_name: 'system',
+        description: details,
+        metadata: metadata || {},
+      });
+    } catch (logError) {
+      console.error('Failed to persist audit error log', logError);
+    }
+  }, [user?.id]);
 
   const loadData = useCallback(async () => {
     try {
@@ -82,6 +107,7 @@ export default function SuperAdmin() {
         { data: logData, error: logError, count: totalLogs },
         { data: profileData, error: profileError, count: totalUsers },
         { data: roleData, error: rolesError },
+        { data: appConfigData, error: appConfigError },
       ] = await Promise.all([
         supabase
           .from('audit_log')
@@ -90,11 +116,16 @@ export default function SuperAdmin() {
           .limit(200),
         supabase.from('profiles').select('user_id, full_name, email', { count: 'exact' }).order('full_name', { ascending: true }),
         supabase.from('user_roles').select('user_id, role'),
+        supabase
+          .from('app_config')
+          .select('key, value')
+          .in('key', ['attendance_checkout_mode', 'attendance_auto_checkout_time', 'attendance_geofence_exit_minutes', 'rest_days_min_separation']),
       ]);
 
       if (logError) throw logError;
       if (profileError) throw profileError;
       if (rolesError) throw rolesError;
+      if (appConfigError) throw appConfigError;
 
       const castedLogs = (logData ?? []) as AuditLog[];
       const rolesByUser = (roleData ?? []).reduce<Record<string, string[]>>((acc, item) => {
@@ -122,6 +153,24 @@ export default function SuperAdmin() {
 
       const uniqueIps = new Set(castedLogs.map((item) => item.source_ip).filter(Boolean)).size;
 
+      const modeValue = appConfigData?.find((item) => item.key === 'attendance_checkout_mode')?.value;
+      const timeValue = appConfigData?.find((item) => item.key === 'attendance_auto_checkout_time')?.value;
+      const minutesValue = appConfigData?.find((item) => item.key === 'attendance_geofence_exit_minutes')?.value;
+      const restSeparationValue = appConfigData?.find((item) => item.key === 'rest_days_min_separation')?.value;
+
+      if (modeValue === 'manual' || modeValue === 'schedule' || modeValue === 'geofence_exit') {
+        setCheckoutMode(modeValue);
+      }
+      if (typeof timeValue === 'string' && /^\d{2}:\d{2}$/.test(timeValue)) {
+        setAutoCheckoutTime(timeValue);
+      }
+      if (typeof minutesValue === 'number' && Number.isFinite(minutesValue)) {
+        setGeofenceExitMinutes(Math.max(0, Math.round(minutesValue)));
+      }
+      if (typeof restSeparationValue === 'number' && Number.isFinite(restSeparationValue)) {
+        setRestDaysMinSeparation(Math.max(1, Math.round(restSeparationValue)));
+      }
+
       setLogs(castedLogs);
       setUsers(usersData);
       setStats({
@@ -133,6 +182,7 @@ export default function SuperAdmin() {
       });
     } catch (error) {
       console.error(error);
+      void logSystemError('superadmin_data_load_error', `Error al cargar panel técnico: ${error instanceof Error ? error.message : 'desconocido'}`);
       toast({
         title: 'Error',
         description: 'No fue posible cargar el panel técnico de superadmin.',
@@ -141,7 +191,7 @@ export default function SuperAdmin() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [logSystemError, toast]);
 
   useEffect(() => {
     loadData();
@@ -241,6 +291,7 @@ export default function SuperAdmin() {
       await loadData();
     } catch (error) {
       console.error(error);
+      void logSystemError('import_attendance_history_error', `Error al importar histórico: ${error instanceof Error ? error.message : 'desconocido'}`, { file_name: file.name });
       toast({
         title: 'Error al importar',
         description: 'No se pudo importar el archivo Excel histórico.',
@@ -265,6 +316,7 @@ export default function SuperAdmin() {
       toast({ title: 'Consulta ejecutada', description: `Filas: ${result.row_count}` });
     } catch (error) {
       console.error(error);
+      void logSystemError('sql_console_error', `Error SQL: ${error instanceof Error ? error.message : 'desconocido'}`, { query: sqlQuery });
       toast({
         title: 'Error SQL',
         description: 'No se pudo ejecutar la consulta. Revisa sintaxis y permisos.',
@@ -275,34 +327,87 @@ export default function SuperAdmin() {
     }
   };
 
-  const resetUserPassword = async (targetUserId: string) => {
-    const newPassword = (passwordDrafts[targetUserId] ?? '').trim();
-
-    if (newPassword.length < 8) {
-      toast({ title: 'Contraseña inválida', description: 'Debe tener al menos 8 caracteres.', variant: 'destructive' });
-      return;
-    }
-
+  const sendPasswordResetEmail = async (targetUserEmail: string) => {
     try {
-      setAccountActionUserId(targetUserId);
-      const { data, error } = await supabase.functions.invoke('reset-user-password', {
-        body: {
-          user_id: targetUserId,
-          new_password: newPassword,
-        },
-      });
+      setAccountActionUserId(targetUserEmail);
+
+      const redirectTo = resolveAuthRedirectUrl(window.location.origin) || `${window.location.origin}/auth`;
+      const { error } = await supabase.auth.resetPasswordForEmail(targetUserEmail, { redirectTo });
 
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
 
-      setPasswordDrafts((prev) => ({ ...prev, [targetUserId]: '' }));
-      toast({ title: 'Contraseña actualizada', description: 'Reset realizado correctamente.' });
-      await loadData();
+      toast({
+        title: 'Correo enviado',
+        description: 'Se envió un enlace seguro para restablecer la contraseña al usuario.',
+      });
     } catch (error) {
       console.error(error);
-      toast({ title: 'Error', description: 'No se pudo resetear la contraseña.', variant: 'destructive' });
+      void logSystemError('password_reset_email_error', `No se pudo enviar email de restablecimiento: ${error instanceof Error ? error.message : 'desconocido'}`, {
+        target_email: targetUserEmail,
+      });
+      toast({ title: 'Error', description: 'No se pudo enviar el email de restablecimiento.', variant: 'destructive' });
     } finally {
       setAccountActionUserId(null);
+    }
+  };
+
+
+  const saveCheckoutSettings = async () => {
+    try {
+      setSavingCheckoutSettings(true);
+
+      const normalizedMinutes = Math.max(0, Math.round(geofenceExitMinutes));
+      const normalizedTime = /^\d{2}:\d{2}$/.test(autoCheckoutTime) ? autoCheckoutTime : '18:30';
+
+      const { error } = await supabase
+        .from('app_config')
+        .upsert([
+          {
+            key: 'attendance_checkout_mode',
+            value: checkoutMode,
+            description: 'Modo de salida de asistencia: manual, schedule o geofence_exit',
+          },
+          {
+            key: 'attendance_auto_checkout_time',
+            value: normalizedTime,
+            description: 'Hora de salida automática cuando el modo es schedule (HH:mm)',
+          },
+          {
+            key: 'attendance_geofence_exit_minutes',
+            value: normalizedMinutes,
+            description: 'Minutos continuos fuera de la zona para salida automática por geofence',
+          },
+          {
+            key: 'rest_days_min_separation',
+            value: Math.max(1, Math.round(restDaysMinSeparation)),
+            description: 'Separación mínima entre días de descanso (parámetro global)',
+          },
+        ], { onConflict: 'key' });
+
+      if (error) throw error;
+
+      setGeofenceExitMinutes(normalizedMinutes);
+      setAutoCheckoutTime(normalizedTime);
+
+      toast({
+        title: 'Configuración guardada',
+        description: 'Se actualizó el modo de salida y los parámetros automáticos.',
+      });
+    } catch (error) {
+      console.error(error);
+      void logSystemError('checkout_settings_save_error', `No se pudo guardar configuración: ${error instanceof Error ? error.message : 'desconocido'}`, {
+        checkout_mode: checkoutMode,
+        auto_checkout_time: autoCheckoutTime,
+        geofence_exit_minutes: geofenceExitMinutes,
+        rest_days_min_separation: restDaysMinSeparation,
+      });
+      toast({
+        title: 'Error',
+        description: 'No se pudo guardar la configuración de salida.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingCheckoutSettings(false);
     }
   };
 
@@ -327,6 +432,7 @@ export default function SuperAdmin() {
       await loadData();
     } catch (error) {
       console.error(error);
+      void logSystemError('delete_user_error', `No se pudo eliminar usuario: ${error instanceof Error ? error.message : 'desconocido'}`, { target_user_id: targetUserId });
       toast({ title: 'Error', description: 'No se pudo eliminar el usuario.', variant: 'destructive' });
     } finally {
       setAccountActionUserId(null);
@@ -358,6 +464,72 @@ export default function SuperAdmin() {
           <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">IPs únicas</p><p className="text-xl font-semibold">{stats.uniqueIps}</p></CardContent></Card>
           <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Cambios por gestores</p><p className="text-xl font-semibold">{stats.totalGlobalManagerChanges}</p></CardContent></Card>
         </div>
+
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2"><Wrench className="h-4 w-4" /> Modo de salida configurable</CardTitle>
+            <CardDescription>Define cómo se registra la salida para todo el sistema.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-3">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Modo de salida</p>
+              <Select value={checkoutMode} onValueChange={(value: CheckoutMode) => setCheckoutMode(value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecciona modo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual">Manual por usuario</SelectItem>
+                  <SelectItem value="schedule">Automática por horario</SelectItem>
+                  <SelectItem value="geofence_exit">Automática por salida de zona</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Hora de salida automática</p>
+              <Input
+                type="time"
+                value={autoCheckoutTime}
+                onChange={(event) => setAutoCheckoutTime(event.target.value)}
+                disabled={checkoutMode !== 'schedule'}
+              />
+              <p className="text-xs text-muted-foreground">Aplica cuando el modo es automática por horario.</p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Minutos fuera de zona</p>
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={geofenceExitMinutes}
+                onChange={(event) => setGeofenceExitMinutes(Number(event.target.value || 0))}
+                disabled={checkoutMode !== 'geofence_exit'}
+              />
+              <p className="text-xs text-muted-foreground">Tiempo continuo fuera de geofence antes de marcar salida.</p>
+            </div>
+
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Separación mínima de descansos (días)</p>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                value={restDaysMinSeparation}
+                onChange={(event) => setRestDaysMinSeparation(Number(event.target.value || 1))}
+              />
+              <p className="text-xs text-muted-foreground">Parámetro global para validar descansos semanales.</p>
+            </div>
+
+            <div className="md:col-span-3 flex justify-end">
+              <Button onClick={saveCheckoutSettings} disabled={savingCheckoutSettings}>
+                {savingCheckoutSettings ? 'Guardando...' : 'Guardar modo de salida'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <Card>
@@ -421,7 +593,7 @@ export default function SuperAdmin() {
                   errorLogs.map((item) => (
                     <div key={item.id} className="border rounded-md p-2 bg-amber-50/40 dark:bg-amber-950/20">
                       <p className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-500" />{item.action}</p>
-                      <p className="text-xs text-muted-foreground">{item.description || 'Sin descripción'} · IP: {item.source_ip || 'N/A'}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString()} · {item.description || 'Sin descripción'} · IP: {item.source_ip || 'N/A'}</p>
                     </div>
                   ))
                 )}
@@ -521,7 +693,7 @@ export default function SuperAdmin() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Gestión total de cuentas</CardTitle>
-            <CardDescription>Reset de contraseña y eliminación de usuarios desde el panel técnico.</CardDescription>
+            <CardDescription>Envío de enlace de restablecimiento por correo y eliminación de usuarios.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 max-h-[350px] overflow-auto">
             {users.map((managedUser) => (
@@ -534,21 +706,14 @@ export default function SuperAdmin() {
                   <Badge variant="secondary" className="capitalize">{managedUser.role.replace('_', ' ')}</Badge>
                 </div>
 
-                <div className="grid gap-2 lg:grid-cols-[1fr_auto_auto]">
-                  <Input
-                    type="password"
-                    value={passwordDrafts[managedUser.user_id] ?? ''}
-                    onChange={(event) => setPasswordDrafts((prev) => ({ ...prev, [managedUser.user_id]: event.target.value }))}
-                    placeholder="Nueva contraseña (mínimo 8 caracteres)"
-                    className="h-8"
-                  />
+                <div className="grid gap-2 lg:grid-cols-[1fr_auto]">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => resetUserPassword(managedUser.user_id)}
-                    disabled={accountActionUserId === managedUser.user_id}
+                    onClick={() => sendPasswordResetEmail(managedUser.email)}
+                    disabled={accountActionUserId === managedUser.email}
                   >
-                    <KeyRound className="h-3.5 w-3.5 mr-1" /> Reset
+                    <Mail className="h-3.5 w-3.5 mr-1" /> Enviar correo de restablecimiento
                   </Button>
                   <Button
                     variant="destructive"

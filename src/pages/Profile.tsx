@@ -39,6 +39,8 @@ export default function Profile() {
   });
   const [saving, setSaving] = useState(false);
 
+  const canEditDepartment = role === 'global_manager' || role === 'superadmin';
+
   useEffect(() => {
     if (!profile) {
       return;
@@ -72,7 +74,7 @@ export default function Profile() {
       full_name: form.fullName.trim(),
       phone: form.phone.trim(),
       email: form.email.trim(),
-      department_id: form.departmentId,
+      department_id: canEditDepartment ? form.departmentId : profile?.department_id ?? form.departmentId,
     });
 
     if (result.error) {
@@ -169,21 +171,29 @@ export default function Profile() {
                     Cargando departamentos...
                   </div>
                 ) : (
-                  <Select
-                    value={form.departmentId}
-                    onValueChange={(value) => setForm((prev) => ({ ...prev, departmentId: value }))}
-                  >
-                    <SelectTrigger id="department">
-                      <SelectValue placeholder="Selecciona un departamento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((department) => (
-                        <SelectItem key={department.id} value={department.id}>
-                          {department.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <>
+                    <Select
+                      value={form.departmentId}
+                      onValueChange={(value) => setForm((prev) => ({ ...prev, departmentId: value }))}
+                      disabled={!canEditDepartment}
+                    >
+                      <SelectTrigger id="department">
+                        <SelectValue placeholder="Selecciona un departamento" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departments.map((department) => (
+                          <SelectItem key={department.id} value={department.id}>
+                            {department.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!canEditDepartment && (
+                      <p className="text-xs text-muted-foreground">
+                        Solo gestor global y superadmin pueden cambiar el departamento.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
