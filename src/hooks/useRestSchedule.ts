@@ -36,11 +36,22 @@ export function useRestSchedule(targetUserId?: string | null) {
   const [groupMode, setGroupMode] = useState<GroupModeInfo>({ enabled: false, departmentName: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [minRestDaysSeparation, setMinRestDaysSeparation] = useState(4);
 
   const fetchSchedules = useCallback(async () => {
     if (!effectiveUserId) return;
 
     try {
+      const { data: appConfigData } = await supabase
+        .from('app_config')
+        .select('value')
+        .eq('key', 'rest_days_min_separation')
+        .maybeSingle();
+
+      const configuredSeparation = appConfigData?.value;
+      if (typeof configuredSeparation === 'number' && Number.isFinite(configuredSeparation) && configuredSeparation >= 1) {
+        setMinRestDaysSeparation(Math.round(configuredSeparation));
+      }
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('department_id')
@@ -158,10 +169,10 @@ export function useRestSchedule(targetUserId?: string | null) {
 
         const directDistance = Math.abs(day2 - day1);
 
-        if (directDistance < 4) {
+        if (directDistance < minRestDaysSeparation) {
           return {
             valid: false,
-            error: 'Los días de descanso deben tener al menos 3 días de trabajo entre ellos (4 días de separación)',
+            error: `Los días de descanso deben tener al menos ${Math.max(minRestDaysSeparation - 1, 0)} días de trabajo entre ellos (${minRestDaysSeparation} días de separación)`,
           };
         }
       }

@@ -57,6 +57,7 @@ export default function Configuration() {
     lateToleranceMinutes: 15,
     vacationDaysPerWorkedDay: 0.0833333333,
     globalTimezone: 'America/Lima',
+    restDaysMinSeparation: 4,
   });
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [importingHistory, setImportingHistory] = useState(false);
@@ -72,7 +73,7 @@ export default function Configuration() {
       const { data, error } = await supabase
         .from('app_config')
         .select('key, value')
-        .in('key', ['include_heads_in_global_reports', 'late_tolerance_minutes', 'vacation_days_per_worked_day', 'global_timezone']);
+        .in('key', ['include_heads_in_global_reports', 'late_tolerance_minutes', 'vacation_days_per_worked_day', 'global_timezone', 'rest_days_min_separation']);
 
       if (error) {
         toast.error(mapGenericActionError(error, 'No se pudo cargar la configuración general.'));
@@ -83,12 +84,14 @@ export default function Configuration() {
       const lateTolerance = data?.find((item) => item.key === 'late_tolerance_minutes')?.value;
       const vacationRate = data?.find((item) => item.key === 'vacation_days_per_worked_day')?.value;
       const globalTimezone = data?.find((item) => item.key === 'global_timezone')?.value;
+      const restDaysMinSeparation = data?.find((item) => item.key === 'rest_days_min_separation')?.value;
 
       setGeneralConfig({
         includeHeadsInGlobalReports: typeof includeHeads === 'boolean' ? includeHeads : false,
         lateToleranceMinutes: typeof lateTolerance === 'number' ? lateTolerance : 15,
         vacationDaysPerWorkedDay: typeof vacationRate === 'number' ? vacationRate : 0.0833333333,
         globalTimezone: typeof globalTimezone === 'string' ? globalTimezone : 'America/Lima',
+        restDaysMinSeparation: typeof restDaysMinSeparation === 'number' ? restDaysMinSeparation : 4,
       });
     };
 
@@ -268,6 +271,10 @@ export default function Configuration() {
           .from('app_config')
           .update({ value: generalConfig.globalTimezone })
           .eq('key', 'global_timezone'),
+        supabase
+          .from('app_config')
+          .update({ value: Math.max(1, Math.round(generalConfig.restDaysMinSeparation)) })
+          .eq('key', 'rest_days_min_separation'),
       ];
 
       const results = await Promise.all(updates);
@@ -682,6 +689,25 @@ export default function Configuration() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Ejemplo: 0.0833 ≈ 1 día de vacaciones acumulado cada 12 días trabajados.
+                  </p>
+                </div>
+
+
+                <div className="space-y-2">
+                  <Label>Separación mínima entre días de descanso</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={generalConfig.restDaysMinSeparation}
+                    onChange={(e) =>
+                      setGeneralConfig((prev) => ({
+                        ...prev,
+                        restDaysMinSeparation: Number.parseInt(e.target.value || '1', 10),
+                      }))
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Define cuántos días de separación mínima habrá entre descansos semanales (parametrizable por centro de trabajo).
                   </p>
                 </div>
 
