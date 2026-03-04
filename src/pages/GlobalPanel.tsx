@@ -89,6 +89,8 @@ interface AttendanceSummary {
   absenceReview: AbsenceReview | null;
 }
 
+const ATTENDANCE_PAGE_SIZE = 10;
+
 interface EmployeeDetails {
   monthPresentDays: number;
   monthLateCheckins: number;
@@ -113,6 +115,7 @@ export default function GlobalPanel() {
   const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [dateRange, setDateRange] = useState({
     from: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
     to: format(new Date(), 'yyyy-MM-dd'),
@@ -490,6 +493,22 @@ export default function GlobalPanel() {
     return matchesSearch && matchesDept;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredAttendance.length / ATTENDANCE_PAGE_SIZE));
+  const paginatedAttendance = useMemo(() => {
+    const start = (currentPage - 1) * ATTENDANCE_PAGE_SIZE;
+    return filteredAttendance.slice(start, start + ATTENDANCE_PAGE_SIZE);
+  }, [currentPage, filteredAttendance]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedDept]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
   const handleSetAbsenceReview = async (targetUserId: string, isJustified: boolean) => {
     try {
       setReviewingUserId(targetUserId);
@@ -628,6 +647,7 @@ export default function GlobalPanel() {
                 </div>
               ))}
             </div>
+
           </CardContent>
         </Card>
 
@@ -679,7 +699,7 @@ export default function GlobalPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAttendance.map((row) => (
+                  {paginatedAttendance.map((row) => (
                     <TableRow key={row.userId}>
                       <TableCell>
                         <div>
@@ -761,6 +781,31 @@ export default function GlobalPanel() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {(currentPage - 1) * ATTENDANCE_PAGE_SIZE + 1}-{Math.min(currentPage * ATTENDANCE_PAGE_SIZE, filteredAttendance.length)} de {filteredAttendance.length} registros
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  Anterior
+                </Button>
+                <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Siguiente
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

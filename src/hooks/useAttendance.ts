@@ -15,6 +15,7 @@ interface AttendanceMark {
   inside_geofence: boolean;
   blocked: boolean;
   block_reason: string | null;
+  work_location_id: string | null;
 }
 
 interface AttendanceState {
@@ -124,6 +125,7 @@ export function useAttendance() {
       accuracy: number | null;
       distanceToCenter: number | null;
       insideGeofence: boolean;
+      workLocationId: string | null;
     }
   ): Promise<MarkAttendanceResult> => {
     if (!user) {
@@ -149,6 +151,7 @@ export function useAttendance() {
           accuracy: geoData.accuracy,
           distance_to_center: geoData.distanceToCenter,
           inside_geofence: geoData.insideGeofence,
+          work_location_id: geoData.workLocationId,
         },
       });
 
