@@ -617,7 +617,7 @@ export default function Configuration() {
                   Ajustes globales del sistema
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-4 rounded-lg bg-secondary">
                   <div>
                     <p className="font-medium">Incluir jefes en reportes globales</p>
@@ -633,8 +633,9 @@ export default function Configuration() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Zona horaria global</Label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Zona horaria global</Label>
                   <Select
                     value={generalConfig.globalTimezone}
                     onValueChange={(value) => setGeneralConfig((prev) => ({ ...prev, globalTimezone: value }))}
@@ -653,10 +654,10 @@ export default function Configuration() {
                   <p className="text-xs text-muted-foreground">
                     Se aplica para todos los departamentos y centraliza el cálculo de tardanzas/ventanas.
                   </p>
-                </div>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>Tolerancia de tardanza (minutos)</Label>
+                  <div className="space-y-2">
+                    <Label>Tolerancia de tardanza (minutos)</Label>
                   <Input
                     type="number"
                     min={0}
@@ -671,10 +672,10 @@ export default function Configuration() {
                   <p className="text-xs text-muted-foreground">
                     Minutos después de la hora de entrada que se consideran tardanza
                   </p>
-                </div>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label>Acumulación de vacaciones por día trabajado</Label>
+                  <div className="space-y-2">
+                    <Label>Acumulación de vacaciones por día trabajado</Label>
                   <Input
                     type="number"
                     min={0}
@@ -690,11 +691,10 @@ export default function Configuration() {
                   <p className="text-xs text-muted-foreground">
                     Ejemplo: 0.0833 ≈ 1 día de vacaciones acumulado cada 12 días trabajados.
                   </p>
-                </div>
+                  </div>
 
-
-                <div className="space-y-2">
-                  <Label>Separación mínima entre días de descanso</Label>
+                  <div className="space-y-2">
+                    <Label>Separación mínima entre días de descanso</Label>
                   <Input
                     type="number"
                     min={1}
@@ -709,9 +709,10 @@ export default function Configuration() {
                   <p className="text-xs text-muted-foreground">
                     Define cuántos días de separación mínima habrá entre descansos semanales (parametrizable por centro de trabajo).
                   </p>
+                  </div>
                 </div>
 
-                <Button className="w-full" onClick={handleSaveGeneral} disabled={savingGeneral}>
+                <Button className="w-full md:w-auto" onClick={handleSaveGeneral} disabled={savingGeneral}>
                   {savingGeneral ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />

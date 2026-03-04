@@ -352,7 +352,7 @@ export default function SuperAdmin() {
   };
 
 
-  const saveCheckoutSettings = async () => {
+  const handleSaveCheckoutSettings = async () => {
     try {
       setSavingCheckoutSettings(true);
 
@@ -524,7 +524,7 @@ export default function SuperAdmin() {
             </div>
 
             <div className="md:col-span-3 flex justify-end">
-              <Button onClick={saveCheckoutSettings} disabled={savingCheckoutSettings}>
+              <Button onClick={handleSaveCheckoutSettings} disabled={savingCheckoutSettings}>
                 {savingCheckoutSettings ? 'Guardando...' : 'Guardar modo de salida'}
               </Button>
             </div>
