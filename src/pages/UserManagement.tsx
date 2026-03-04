@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth, AppRole } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -77,6 +77,8 @@ interface UserWithRole {
   role: AppRole;
 }
 
+const USERS_PAGE_SIZE = 10;
+
 const createUserSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(6, 'Mínimo 6 caracteres'),
@@ -102,12 +104,19 @@ export default function UserManagement() {
   // Filters
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterRole, setFilterRole] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
   
   const filteredUsers = users.filter(user => {
     const matchesDepartment = filterDepartment === 'all' || user.department_id === filterDepartment;
     const matchesRole = filterRole === 'all' || user.role === filterRole;
     return matchesDepartment && matchesRole;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PAGE_SIZE));
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * USERS_PAGE_SIZE;
+    return filteredUsers.slice(start, start + USERS_PAGE_SIZE);
+  }, [currentPage, filteredUsers]);
   
   // Create user state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -179,6 +188,18 @@ export default function UserManagement() {
       fetchUsers();
     }
   }, [departments, fetchUsers]);
+
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterDepartment, filterRole]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
 
   const handleEditUser = (user: UserWithRole) => {
     setEditingUser(user);
@@ -463,6 +484,7 @@ export default function UserManagement() {
                 {users.length === 0 ? 'No hay usuarios registrados' : 'No hay usuarios que coincidan con los filtros'}
               </div>
             ) : (
+              <>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -474,7 +496,7 @@ export default function UserManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
+                  {paginatedUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.full_name}</TableCell>
                       <TableCell>{user.email}</TableCell>
@@ -508,6 +530,31 @@ export default function UserManagement() {
                   ))}
                 </TableBody>
               </Table>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {(currentPage - 1) * USERS_PAGE_SIZE + 1}-{Math.min(currentPage * USERS_PAGE_SIZE, filteredUsers.length)} de {filteredUsers.length} usuarios
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage <= 1}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage >= totalPages}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+              </>
             )}
           </CardContent>
         </Card>
