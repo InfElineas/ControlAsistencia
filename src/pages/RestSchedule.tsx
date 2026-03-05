@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Calendar, Plus, Check, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { mapGenericActionError } from '@/lib/error-messages';
+import { mapGenericActionError, mapRestScheduleError } from '@/lib/error-messages';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -116,7 +116,7 @@ function RestScheduleSection({
 
       const { error } = await assignGroup(selectedGroupId, effectiveFrom, notes || undefined);
       if (error) {
-        toast.error(mapGenericActionError(error, 'No se pudo asignar el grupo de descanso.'));
+        toast.error(mapRestScheduleError(error, 'No se pudo asignar el grupo de descanso.'));
       } else {
         toast.success('Grupo de descanso asignado correctamente');
         setNotes('');
@@ -140,7 +140,7 @@ function RestScheduleSection({
     const { error } = await addSchedule(selectedDays, effectiveFrom, notes || undefined);
 
     if (error) {
-      toast.error(mapGenericActionError(error, 'No se pudo completar la operación.'));
+      toast.error(mapRestScheduleError(error, 'No se pudo completar la operación.'));
     } else {
       toast.success('Días de descanso guardados correctamente');
       setSelectedDays([]);

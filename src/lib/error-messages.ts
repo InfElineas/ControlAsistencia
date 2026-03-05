@@ -116,3 +116,34 @@ export function mapGenericActionError(error: unknown, fallback: string): string 
   }
   return fallback;
 }
+
+export function mapRestScheduleError(error: unknown, fallback: string): string {
+  const message = getErrorMessage(error);
+  const raw = message.toLowerCase();
+
+  if (includesAny(raw, ['modo operativo activo', 'departamento tiene un modo operativo activo'])) {
+    return 'No se guardó el descanso porque el departamento tiene activo el modo sin descanso o el modo de departamento en descanso. Desactiva ese modo desde Configuración para continuar.';
+  }
+
+  if (includesAny(raw, ['grupos de descanso', 'grupo de descanso'])) {
+    return message;
+  }
+
+  if (includesAny(raw, ['día ya trabajado', 'dia ya trabajado'])) {
+    return `${message} Ajusta la fecha "Vigente desde" o elige otro día de descanso.`;
+  }
+
+  if (includesAny(raw, ['separación', 'separacion', 'días de trabajo entre ellos', 'dias de trabajo entre ellos'])) {
+    return `${message} Revisa el parámetro global de separación mínima de descansos.`;
+  }
+
+  if (includesAny(raw, ['permission denied', 'unauthorized', 'forbidden'])) {
+    return 'No tienes permisos para guardar esta configuración de descanso.';
+  }
+
+  if (includesAny(raw, ['network', 'connection', 'fetch'])) {
+    return 'No se pudo conectar con el servidor al guardar el descanso. Intenta de nuevo.';
+  }
+
+  return message || fallback;
+}
