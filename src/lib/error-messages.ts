@@ -147,3 +147,26 @@ export function mapRestScheduleError(error: unknown, fallback: string): string {
 
   return message || fallback;
 }
+
+
+export function mapPasswordChangeError(error: unknown): string {
+  const raw = getErrorMessage(error).toLowerCase();
+
+  if (includesAny(raw, ['same password', 'should be different', 'new password should be different'])) {
+    return 'La nueva contraseña debe ser diferente a la actual.';
+  }
+
+  if (includesAny(raw, ['password should be at least', 'weak password', 'password'])) {
+    return 'La contraseña no cumple los requisitos mínimos de seguridad (mínimo 6 caracteres).';
+  }
+
+  if (includesAny(raw, ['invalid jwt', 'jwt expired', 'session'])) {
+    return 'Tu sesión expiró. Inicia sesión nuevamente para cambiar la contraseña.';
+  }
+
+  if (includesAny(raw, ['network', 'connection', 'fetch'])) {
+    return 'No se pudo conectar con el servidor para actualizar la contraseña.';
+  }
+
+  return 'No se pudo actualizar la contraseña. Intenta nuevamente.';
+}

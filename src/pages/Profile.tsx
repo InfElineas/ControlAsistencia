@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Save, UserCircle2 } from 'lucide-react';
+import { KeyRound, Loader2, Save, UserCircle2 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useDepartments } from '@/hooks/useDepartments';
 import { toast } from 'sonner';
-import { mapGenericActionError } from '@/lib/error-messages';
+import { mapGenericActionError, mapPasswordChangeError } from '@/lib/error-messages';
+import { supabase } from '@/integrations/supabase/client';
 import { useUIMode } from '@/hooks/use-ui-mode';
 import { EmployeeProfilePage } from '@/pages/employee/EmployeeProfilePage';
 
@@ -38,6 +39,11 @@ export default function Profile() {
     departmentId: '',
   });
   const [saving, setSaving] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+
+  const canEditDepartment = role === 'global_manager' || role === 'superadmin';
 
   const canEditDepartment = role === 'global_manager' || role === 'superadmin';
 
@@ -90,6 +96,33 @@ export default function Profile() {
     }
 
     setSaving(false);
+  };
+
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) {
+      toast.error('La nueva contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('Las contraseñas no coinciden.');
+      return;
+    }
+
+    setUpdatingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (error) {
+      toast.error(mapPasswordChangeError(error));
+      setUpdatingPassword(false);
+      return;
+    }
+
+    toast.success('Contraseña actualizada correctamente.');
+    setNewPassword('');
+    setConfirmPassword('');
+    setUpdatingPassword(false);
   };
 
   if (authLoading) {
@@ -215,6 +248,63 @@ export default function Profile() {
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" />
+              Seguridad
+            </CardTitle>
+            <CardDescription>
+              Cambia tu contraseña personal. Este cambio aplica solo a tu cuenta.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">Nueva contraseña</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repite la nueva contraseña"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                onClick={handleChangePassword}
+                disabled={updatingPassword || !newPassword || !confirmPassword}
+              >
+                {updatingPassword ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Actualizando...
+                  </>
+                ) : (
+                  <>
+                    <KeyRound className="h-4 w-4 mr-2" />
+                    Cambiar contraseña
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
       </div>
     </AppLayout>
   );
