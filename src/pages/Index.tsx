@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -53,13 +53,23 @@ export default function Index() {
   const { user, profile, role, loading: authLoading } = useAuth();
   const { todayMarks, lastMark } = useAttendance();
   const { isRestDay, currentSchedule } = useRestSchedule();
-  const { unreadCount } = useNotifications();
+  const { notifications, unreadCount } = useNotifications();
   const uiMode = useUIMode(role ?? null);
 
   const isGlobalManager = role === 'global_manager' || role === 'superadmin';
 
   const [adminStats, setAdminStats] = useState<AdminDashboardStats | null>(null);
   const [loadingAdminStats, setLoadingAdminStats] = useState(false);
+
+  const latestScheduleNotification = useMemo(
+    () =>
+      notifications.find(
+        (notification) =>
+          notification.title === 'Horario de entrada actualizado'
+      ) || null,
+    [notifications]
+  );
+
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -259,6 +269,27 @@ export default function Index() {
             </CardContent>
           </Card>
         </div>
+
+
+        {!isGlobalManager && latestScheduleNotification && (
+          <Card className={!latestScheduleNotification.is_read ? 'border-primary/40' : ''}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Notificación de horario</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="font-medium">{latestScheduleNotification.title}</p>
+              <p className="text-sm text-muted-foreground">{latestScheduleNotification.message}</p>
+              <p className="text-xs text-muted-foreground">
+                {format(new Date(latestScheduleNotification.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+              </p>
+              <div>
+                <Button size="sm" variant="outline" onClick={() => navigate('/notifications')}>
+                  Ver notificaciones
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
