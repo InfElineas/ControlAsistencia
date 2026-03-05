@@ -45,8 +45,6 @@ export default function Profile() {
 
   const canEditDepartment = role === 'global_manager' || role === 'superadmin';
 
-  const canEditDepartment = role === 'global_manager' || role === 'superadmin';
-
   useEffect(() => {
     if (!profile) {
       return;
