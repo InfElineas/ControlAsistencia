@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRestSchedule } from '@/hooks/useRestSchedule';
+import { useManagedDepartments } from '@/hooks/useManagedDepartments';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -9,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Calendar, Plus, Check, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { mapGenericActionError } from '@/lib/error-messages';
+import { mapGenericActionError, mapRestScheduleError } from '@/lib/error-messages';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -50,6 +51,7 @@ interface ScheduleSectionProps {
   restGroups: Array<{ id: string; name: string; days_of_week: number[] }>;
   currentGroupId: string | null;
   canUsePersonalSchedule?: boolean;
+  departmentPaused?: boolean;
   addSchedule: (daysOfWeek: number[], effectiveFrom: string, notes?: string) => Promise<{ error: string | null }>;
   assignGroup: (groupId: string, effectiveFrom: string, notes?: string) => Promise<{ error: string | null }>;
   validateRestDaysSeparation: (daysOfWeek: number[]) => { valid: boolean; error?: string };
@@ -65,6 +67,7 @@ function RestScheduleSection({
   restGroups,
   currentGroupId,
   canUsePersonalSchedule,
+  departmentPaused,
   addSchedule,
   assignGroup,
   validateRestDaysSeparation,
@@ -114,7 +117,7 @@ function RestScheduleSection({
 
       const { error } = await assignGroup(selectedGroupId, effectiveFrom, notes || undefined);
       if (error) {
-        toast.error(mapGenericActionError(error, 'No se pudo asignar el grupo de descanso.'));
+        toast.error(mapRestScheduleError(error, 'No se pudo asignar el grupo de descanso.'));
       } else {
         toast.success('Grupo de descanso asignado correctamente');
         setNotes('');
@@ -138,7 +141,7 @@ function RestScheduleSection({
     const { error } = await addSchedule(selectedDays, effectiveFrom, notes || undefined);
 
     if (error) {
-      toast.error(mapGenericActionError(error, 'No se pudo completar la operación.'));
+      toast.error(mapRestScheduleError(error, 'No se pudo completar la operación.'));
     } else {
       toast.success('Días de descanso guardados correctamente');
       setSelectedDays([]);
@@ -172,6 +175,17 @@ function RestScheduleSection({
             </CardTitle>
             <CardDescription>
               Este trabajador pertenece a un departamento con descansos por grupos ({groupMode.departmentName}).
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {departmentPaused && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardHeader>
+            <CardTitle className="text-lg">Modo departamental activo</CardTitle>
+            <CardDescription>
+              En este momento no puedes registrar descansos para este departamento.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -289,7 +303,7 @@ function RestScheduleSection({
             />
           </div>
 
-          <Button onClick={handleSave} disabled={saving} className="w-full">
+          <Button onClick={handleSave} disabled={saving || Boolean(departmentPaused)} className="w-full">
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -342,12 +356,33 @@ export default function RestSchedule() {
   const [workerOptions, setWorkerOptions] = useState<WorkerOption[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [loadingWorkers, setLoadingWorkers] = useState(false);
+  const { departments: managedDepartments } = useManagedDepartments(user?.id, profile?.department_id);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
 
   const personalSchedule = useRestSchedule();
   const departmentSchedule = useRestSchedule(isDepartmentHead ? selectedUserId : null);
 
   useEffect(() => {
-    if (!isDepartmentHead || !profile?.department_id) return;
+    if (!isDepartmentHead) return;
+    if (managedDepartments.length === 0) {
+      setSelectedDepartmentId('');
+      return;
+    }
+
+    setSelectedDepartmentId((current) =>
+      current && managedDepartments.some((department) => department.id === current)
+        ? current
+        : managedDepartments[0].id
+    );
+  }, [isDepartmentHead, managedDepartments]);
+
+
+  useEffect(() => {
+    setSelectedUserId(null);
+  }, [selectedDepartmentId]);
+
+  useEffect(() => {
+    if (!isDepartmentHead || !selectedDepartmentId) return;
 
     const fetchDepartmentWorkers = async () => {
       setLoadingWorkers(true);
@@ -355,7 +390,7 @@ export default function RestSchedule() {
         supabase
           .from('profiles')
           .select('user_id, full_name, email')
-          .eq('department_id', profile.department_id)
+          .eq('department_id', selectedDepartmentId)
           .order('full_name', { ascending: true }),
         supabase
           .from('user_roles')
@@ -380,14 +415,18 @@ export default function RestSchedule() {
       );
 
       setWorkerOptions(workers);
-      if (!selectedUserId && workers.length > 0) {
-        setSelectedUserId(workers[0].user_id);
+      if (workers.length > 0) {
+        setSelectedUserId((current) =>
+          current && workers.some((worker) => worker.user_id === current)
+            ? current
+            : workers[0].user_id
+        );
       }
       setLoadingWorkers(false);
     };
 
     fetchDepartmentWorkers();
-  }, [isDepartmentHead, profile?.department_id, selectedUserId, user?.id]);
+  }, [isDepartmentHead, selectedDepartmentId, selectedUserId, user?.id]);
 
   if (isGlobalManager) {
     return (
@@ -432,6 +471,7 @@ export default function RestSchedule() {
                 restGroups={personalSchedule.restGroups}
                 currentGroupId={personalSchedule.currentGroupId}
                 canUsePersonalSchedule={personalSchedule.canUsePersonalSchedule}
+                departmentPaused={personalSchedule.departmentPaused}
                 addSchedule={personalSchedule.addSchedule}
                 assignGroup={personalSchedule.assignGroup}
                 validateRestDaysSeparation={personalSchedule.validateRestDaysSeparation}
@@ -439,6 +479,27 @@ export default function RestSchedule() {
             </TabsContent>
 
             <TabsContent value="department" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Departamento a gestionar</CardTitle>
+                  <CardDescription>Selecciona uno de los departamentos bajo tu responsabilidad.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Select value={selectedDepartmentId} onValueChange={setSelectedDepartmentId} disabled={managedDepartments.length === 0}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={managedDepartments.length === 0 ? 'No tienes departamentos asignados' : 'Selecciona un departamento'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {managedDepartments.map((department) => (
+                        <SelectItem key={department.id} value={department.id}>
+                          {department.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Seleccionar trabajador del departamento</CardTitle>
@@ -460,7 +521,7 @@ export default function RestSchedule() {
                 </CardContent>
               </Card>
 
-              {selectedUserId ? (
+              {selectedDepartmentId && selectedUserId ? (
                 <RestScheduleSection
                   title="Descansos del departamento"
                   description="Configura los descansos del trabajador seleccionado."
@@ -473,6 +534,7 @@ export default function RestSchedule() {
                   addSchedule={departmentSchedule.addSchedule}
                   assignGroup={departmentSchedule.assignGroup}
                   validateRestDaysSeparation={departmentSchedule.validateRestDaysSeparation}
+                  departmentPaused={departmentSchedule.departmentPaused}
                 />
               ) : (
                 <Card>
@@ -494,6 +556,7 @@ export default function RestSchedule() {
             restGroups={personalSchedule.restGroups}
             currentGroupId={personalSchedule.currentGroupId}
             canUsePersonalSchedule={personalSchedule.canUsePersonalSchedule}
+            departmentPaused={personalSchedule.departmentPaused}
             addSchedule={personalSchedule.addSchedule}
             assignGroup={personalSchedule.assignGroup}
             validateRestDaysSeparation={personalSchedule.validateRestDaysSeparation}
