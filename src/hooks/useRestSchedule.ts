@@ -36,11 +36,23 @@ export function useRestSchedule(targetUserId?: string | null) {
   const [groupMode, setGroupMode] = useState<GroupModeInfo>({ enabled: false, departmentName: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [minRestDaysSeparation, setMinRestDaysSeparation] = useState(4);
+  const [departmentPaused, setDepartmentPaused] = useState(false);
 
   const fetchSchedules = useCallback(async () => {
     if (!effectiveUserId) return;
 
     try {
+      const { data: appConfigData } = await supabase
+        .from('app_config')
+        .select('value')
+        .eq('key', 'rest_days_min_separation')
+        .maybeSingle();
+
+      const configuredSeparation = appConfigData?.value;
+      if (typeof configuredSeparation === 'number' && Number.isFinite(configuredSeparation) && configuredSeparation >= 1) {
+        setMinRestDaysSeparation(Math.round(configuredSeparation));
+      }
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('department_id')
@@ -52,13 +64,14 @@ export function useRestSchedule(targetUserId?: string | null) {
       const departmentId = profileData.department_id;
       const { data: departmentData, error: departmentError } = await supabase
         .from('departments')
-        .select('name, rest_groups_enabled')
+        .select('name, rest_groups_enabled, is_paused')
         .eq('id', departmentId)
         .single();
 
       if (departmentError) throw departmentError;
 
       const isGroupModeEnabled = Boolean(departmentData.rest_groups_enabled);
+      setDepartmentPaused(Boolean(departmentData.is_paused));
 
       const now = new Date();
       const currentDay = now.getDay();
@@ -157,13 +170,11 @@ export function useRestSchedule(targetUserId?: string | null) {
         const day2 = sortedDays[j];
 
         const directDistance = Math.abs(day2 - day1);
-        const wrapDistance = 7 - directDistance;
-        const minDistance = Math.min(directDistance, wrapDistance);
 
-        if (minDistance < 3) {
+        if (directDistance < minRestDaysSeparation) {
           return {
             valid: false,
-            error: 'Los días de descanso deben tener al menos 3 días de separación entre ellos',
+            error: `Los días de descanso deben tener al menos ${Math.max(minRestDaysSeparation - 1, 0)} días de trabajo entre ellos (${minRestDaysSeparation} días de separación)`,
           };
         }
       }
@@ -209,6 +220,10 @@ export function useRestSchedule(targetUserId?: string | null) {
   const addSchedule = async (daysOfWeek: number[], effectiveFrom: string, notes?: string) => {
     if (!effectiveUserId) return { error: 'Usuario no autenticado' };
 
+    if (departmentPaused) {
+      return { error: 'Tu departamento tiene un modo operativo activo y no permite registrar descansos en este momento.' };
+    }
+
     if (groupMode.enabled) {
       return { error: `El departamento ${groupMode.departmentName || ''} trabaja con grupos de descanso.` };
     }
@@ -243,6 +258,10 @@ export function useRestSchedule(targetUserId?: string | null) {
 
   const assignGroup = async (groupId: string, effectiveFrom: string, notes?: string) => {
     if (!effectiveUserId) return { error: 'Usuario no autenticado' };
+
+    if (departmentPaused) {
+      return { error: 'Tu departamento tiene un modo operativo activo y no permite registrar descansos en este momento.' };
+    }
 
     if (!groupMode.enabled) {
       return { error: 'Este departamento no tiene grupos de descanso activos.' };
@@ -292,6 +311,7 @@ export function useRestSchedule(targetUserId?: string | null) {
     restGroups,
     currentGroupId,
     groupMode,
+    departmentPaused,
     canUsePersonalSchedule,
     isRestDay,
     validateRestDaysSeparation,
