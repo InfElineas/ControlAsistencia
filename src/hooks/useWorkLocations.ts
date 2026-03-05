@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -21,8 +21,27 @@ export function useWorkLocations() {
   const { user } = useAuth();
   const [locations, setLocations] = useState<WorkLocation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [storageReady, setStorageReady] = useState(false);
+  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
 
-  const activeLocationId = useMemo(() => localStorage.getItem(getStorageKey(user?.id)) || null, [user?.id]);
+  useEffect(() => {
+    setStorageReady(false);
+    const key = getStorageKey(user?.id);
+    setActiveLocationId(localStorage.getItem(key));
+    setStorageReady(true);
+
+    const handleStorageSync = () => {
+      setActiveLocationId(localStorage.getItem(key));
+    };
+
+    window.addEventListener('storage', handleStorageSync);
+    window.addEventListener('work-location-changed', handleStorageSync);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageSync);
+      window.removeEventListener('work-location-changed', handleStorageSync);
+    };
+  }, [user?.id]);
 
   const fetchLocations = useCallback(async () => {
     setLoading(true);
@@ -42,18 +61,33 @@ export function useWorkLocations() {
 
   const setActiveLocation = useCallback(
     (locationId: string) => {
-      localStorage.setItem(getStorageKey(user?.id), locationId);
+      const key = getStorageKey(user?.id);
+      localStorage.setItem(key, locationId);
+      setActiveLocationId(locationId);
+      window.dispatchEvent(new Event('work-location-changed'));
     },
     [user?.id]
   );
 
   const clearActiveLocation = useCallback(() => {
-    localStorage.removeItem(getStorageKey(user?.id));
+    const key = getStorageKey(user?.id);
+    localStorage.removeItem(key);
+    setActiveLocationId(null);
+    window.dispatchEvent(new Event('work-location-changed'));
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!activeLocationId) return;
+    if (loading) return;
+    if (locations.length === 0) return;
+    if (locations.some((location) => location.id === activeLocationId)) return;
+    clearActiveLocation();
+  }, [activeLocationId, clearActiveLocation, loading, locations]);
 
   return {
     locations,
     loading,
+    storageReady,
     activeLocationId,
     setActiveLocation,
     clearActiveLocation,
