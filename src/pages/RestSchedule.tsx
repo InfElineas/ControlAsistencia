@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Calendar, Plus, Check, Users } from 'lucide-react';
 import { toast } from 'sonner';
-import { mapGenericActionError } from '@/lib/error-messages';
+import { mapGenericActionError, mapRestScheduleError } from '@/lib/error-messages';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -50,6 +50,7 @@ interface ScheduleSectionProps {
   restGroups: Array<{ id: string; name: string; days_of_week: number[] }>;
   currentGroupId: string | null;
   canUsePersonalSchedule?: boolean;
+  departmentPaused?: boolean;
   addSchedule: (daysOfWeek: number[], effectiveFrom: string, notes?: string) => Promise<{ error: string | null }>;
   assignGroup: (groupId: string, effectiveFrom: string, notes?: string) => Promise<{ error: string | null }>;
   validateRestDaysSeparation: (daysOfWeek: number[]) => { valid: boolean; error?: string };
@@ -65,6 +66,7 @@ function RestScheduleSection({
   restGroups,
   currentGroupId,
   canUsePersonalSchedule,
+  departmentPaused,
   addSchedule,
   assignGroup,
   validateRestDaysSeparation,
@@ -114,7 +116,7 @@ function RestScheduleSection({
 
       const { error } = await assignGroup(selectedGroupId, effectiveFrom, notes || undefined);
       if (error) {
-        toast.error(mapGenericActionError(error, 'No se pudo asignar el grupo de descanso.'));
+        toast.error(mapRestScheduleError(error, 'No se pudo asignar el grupo de descanso.'));
       } else {
         toast.success('Grupo de descanso asignado correctamente');
         setNotes('');
@@ -138,7 +140,7 @@ function RestScheduleSection({
     const { error } = await addSchedule(selectedDays, effectiveFrom, notes || undefined);
 
     if (error) {
-      toast.error(mapGenericActionError(error, 'No se pudo completar la operación.'));
+      toast.error(mapRestScheduleError(error, 'No se pudo completar la operación.'));
     } else {
       toast.success('Días de descanso guardados correctamente');
       setSelectedDays([]);
@@ -172,6 +174,17 @@ function RestScheduleSection({
             </CardTitle>
             <CardDescription>
               Este trabajador pertenece a un departamento con descansos por grupos ({groupMode.departmentName}).
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {departmentPaused && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardHeader>
+            <CardTitle className="text-lg">Modo departamental activo</CardTitle>
+            <CardDescription>
+              En este momento no puedes registrar descansos para este departamento.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -289,7 +302,7 @@ function RestScheduleSection({
             />
           </div>
 
-          <Button onClick={handleSave} disabled={saving} className="w-full">
+          <Button onClick={handleSave} disabled={saving || Boolean(departmentPaused)} className="w-full">
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -432,6 +445,7 @@ export default function RestSchedule() {
                 restGroups={personalSchedule.restGroups}
                 currentGroupId={personalSchedule.currentGroupId}
                 canUsePersonalSchedule={personalSchedule.canUsePersonalSchedule}
+                departmentPaused={personalSchedule.departmentPaused}
                 addSchedule={personalSchedule.addSchedule}
                 assignGroup={personalSchedule.assignGroup}
                 validateRestDaysSeparation={personalSchedule.validateRestDaysSeparation}
@@ -473,6 +487,7 @@ export default function RestSchedule() {
                   addSchedule={departmentSchedule.addSchedule}
                   assignGroup={departmentSchedule.assignGroup}
                   validateRestDaysSeparation={departmentSchedule.validateRestDaysSeparation}
+                  departmentPaused={departmentSchedule.departmentPaused}
                 />
               ) : (
                 <Card>
@@ -494,6 +509,7 @@ export default function RestSchedule() {
             restGroups={personalSchedule.restGroups}
             currentGroupId={personalSchedule.currentGroupId}
             canUsePersonalSchedule={personalSchedule.canUsePersonalSchedule}
+            departmentPaused={personalSchedule.departmentPaused}
             addSchedule={personalSchedule.addSchedule}
             assignGroup={personalSchedule.assignGroup}
             validateRestDaysSeparation={personalSchedule.validateRestDaysSeparation}

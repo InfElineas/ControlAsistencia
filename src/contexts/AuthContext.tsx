@@ -197,12 +197,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailConfirmationRequired = true;
       }
 
+      const departmentIdToSave = role === 'global_manager' || role === 'superadmin'
+        ? input.department_id
+        : profile?.department_id ?? input.department_id;
+
       const { data, error } = await supabase
         .from('profiles')
         .update({
           full_name: input.full_name,
           phone: input.phone,
-          department_id: input.department_id,
+          department_id: departmentIdToSave,
           email: input.email,
         })
         .eq('user_id', user.id)
