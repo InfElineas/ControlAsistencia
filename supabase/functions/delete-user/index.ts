@@ -18,27 +18,28 @@ serve(async (req: Request): Promise<Response> => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("No authorization header");
+      throw new Error("Unauthorized");
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const accessToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!accessToken) {
+      throw new Error("Unauthorized");
+    }
 
     const {
       data: { user: currentUser },
       error: userError,
-    } = await userClient.auth.getUser();
+    } = await adminClient.auth.getUser(accessToken);
 
     if (userError || !currentUser) {
       throw new Error("Unauthorized");
     }
 
-    const { data: roleData, error: roleError } = await userClient
+    const { data: roleData, error: roleError } = await adminClient
       .from("user_roles")
       .select("role")
       .eq("user_id", currentUser.id)
@@ -62,8 +63,6 @@ serve(async (req: Request): Promise<Response> => {
     if (user_id === currentUser.id) {
       throw new Error("No puedes eliminar tu propio usuario");
     }
-
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: targetProfile } = await adminClient
       .from("profiles")
@@ -92,7 +91,6 @@ serve(async (req: Request): Promise<Response> => {
         throw new Error("No puedes eliminar al último superadmin");
       }
     }
-
 
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(user_id);
 
