@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -12,8 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { IncidentStatus, buildIncidentErrorMessage, formatIncidentStatus } from '@/lib/incidents';
+import { IncidentStatus, INCIDENT_TYPES, IncidentType, buildIncidentErrorMessage, formatIncidentStatus } from '@/lib/incidents';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useManagedDepartments } from '@/hooks/useManagedDepartments';
 
 interface IncidentRow {
   id: string;
@@ -41,12 +42,54 @@ function statusVariant(status: IncidentStatus) {
 }
 
 export function IncidentsManagementPage() {
-  const { user, role } = useAuth();
+  const { user, role, profile } = useAuth();
   const queryClient = useQueryClient();
   const { createNotification } = useNotifications();
   const [notesById, setNotesById] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<'all' | IncidentStatus>('pending');
   const [search, setSearch] = useState('');
+
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [createType, setCreateType] = useState<IncidentType>('olvidé marcar');
+  const [createRequestedAt, setCreateRequestedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+  const [createReason, setCreateReason] = useState('');
+
+  const { departments: managedDepartments } = useManagedDepartments(user?.id, profile?.department_id);
+
+  const { data: manageableWorkers = [] } = useQuery({
+    queryKey: ['incident-manageable-workers', user?.id, managedDepartments.map((department) => department.id).join(',')],
+    enabled: Boolean(user?.id),
+    queryFn: async () => {
+      let query = supabase
+        .from('profiles')
+        .select('user_id, full_name, email, department_id, departments(name)')
+        .order('full_name', { ascending: true });
+
+      if (role === 'department_head') {
+        const departmentIds = managedDepartments.map((department) => department.id);
+        if (departmentIds.length === 0) return [] as ProfileRow[];
+        query = query.in('department_id', departmentIds);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const workers = (data || []) as ProfileRow[];
+      const [{ data: roleRows, error: roleError }] = await Promise.all([
+        supabase.from('user_roles').select('user_id, role').in('user_id', workers.map((worker) => worker.user_id)),
+      ]);
+
+      if (roleError) throw roleError;
+
+      const managerIds = new Set(
+        (roleRows || [])
+          .filter((item) => ['department_head', 'global_manager', 'superadmin'].includes(item.role))
+          .map((item) => item.user_id)
+      );
+
+      return workers.filter((worker) => worker.user_id !== user?.id && !managerIds.has(worker.user_id));
+    },
+  });
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['incidents-management', user?.id],
@@ -122,7 +165,7 @@ export function IncidentsManagementPage() {
       void createNotification({
         userId: variables.userId,
         title: variables.status === 'approved' ? 'Incidencia aprobada' : 'Incidencia rechazada',
-        message: variables.status === 'approved' ? 'Tu solicitud fue aprobada por un gestor.' : 'Tu solicitud fue rechazada por un gestor.',
+        message: variables.status === 'approved' ? 'Tu solicitud fue aprobada por tu jefe/gestor.' : 'Tu solicitud fue rechazada por tu jefe/gestor.',
         type: variables.status === 'approved' ? 'success' : 'warning',
         link: '/incidents',
       });
@@ -132,8 +175,97 @@ export function IncidentsManagementPage() {
     onError: (error) => toast.error(buildIncidentErrorMessage(error)),
   });
 
+  const createIncidentMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedUserId) {
+        throw new Error('Selecciona un trabajador para registrar la incidencia.');
+      }
+
+      const normalizedReason = createReason.trim();
+      if ((createType === 'olvidé marcar' || createType === 'tardanza' || createType === 'salida temprana') && !normalizedReason) {
+        throw new Error('Debes indicar un motivo para este tipo de incidencia.');
+      }
+
+      const { error } = await supabase.from('attendance_incidents').insert({
+        user_id: selectedUserId,
+        incident_type: createType,
+        requested_at: new Date(createRequestedAt).toISOString(),
+        reason: normalizedReason || null,
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Incidencia registrada para el trabajador.');
+      void createNotification({
+        userId: selectedUserId,
+        title: 'Incidencia registrada por jefatura',
+        message: 'Tu jefe/gestor registró una incidencia y está pendiente de revisión.',
+        type: 'info',
+        link: '/incidents',
+      });
+      setCreateReason('');
+      queryClient.invalidateQueries({ queryKey: ['incidents-management', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['incidents', selectedUserId] });
+    },
+    onError: (mutationError) => toast.error(buildIncidentErrorMessage(mutationError)),
+  });
+
+  const handleCreateIncident = (event: FormEvent) => {
+    event.preventDefault();
+    createIncidentMutation.mutate();
+  };
+
   return (
     <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Registrar incidencia a un trabajador</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form className="space-y-3" onSubmit={handleCreateIncident}>
+            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona trabajador" />
+              </SelectTrigger>
+              <SelectContent>
+                {manageableWorkers.map((worker) => (
+                  <SelectItem key={worker.user_id} value={worker.user_id}>
+                    {worker.full_name} · {worker.departments?.name || 'Sin departamento'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={createType} onValueChange={(value) => setCreateType(value as IncidentType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INCIDENT_TYPES.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Input type="datetime-local" value={createRequestedAt} onChange={(e) => setCreateRequestedAt(e.target.value)} required />
+            <Textarea
+              placeholder="Motivo"
+              value={createReason}
+              onChange={(e) => setCreateReason(e.target.value)}
+              maxLength={300}
+            />
+            <p className="text-xs text-muted-foreground text-right">{createReason.length}/300</p>
+
+            <Button className="w-full" disabled={createIncidentMutation.isPending || manageableWorkers.length === 0}>
+              {createIncidentMutation.isPending ? 'Guardando...' : 'Registrar incidencia'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
