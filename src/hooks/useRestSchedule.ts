@@ -37,6 +37,7 @@ export function useRestSchedule(targetUserId?: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [minRestDaysSeparation, setMinRestDaysSeparation] = useState(4);
+  const [departmentPaused, setDepartmentPaused] = useState(false);
 
   const fetchSchedules = useCallback(async () => {
     if (!effectiveUserId) return;
@@ -63,13 +64,14 @@ export function useRestSchedule(targetUserId?: string | null) {
       const departmentId = profileData.department_id;
       const { data: departmentData, error: departmentError } = await supabase
         .from('departments')
-        .select('name, rest_groups_enabled')
+        .select('name, rest_groups_enabled, is_paused')
         .eq('id', departmentId)
         .single();
 
       if (departmentError) throw departmentError;
 
       const isGroupModeEnabled = Boolean(departmentData.rest_groups_enabled);
+      setDepartmentPaused(Boolean(departmentData.is_paused));
 
       const now = new Date();
       const currentDay = now.getDay();
@@ -218,6 +220,10 @@ export function useRestSchedule(targetUserId?: string | null) {
   const addSchedule = async (daysOfWeek: number[], effectiveFrom: string, notes?: string) => {
     if (!effectiveUserId) return { error: 'Usuario no autenticado' };
 
+    if (departmentPaused) {
+      return { error: 'Tu departamento tiene un modo operativo activo y no permite registrar descansos en este momento.' };
+    }
+
     if (groupMode.enabled) {
       return { error: `El departamento ${groupMode.departmentName || ''} trabaja con grupos de descanso.` };
     }
@@ -252,6 +258,10 @@ export function useRestSchedule(targetUserId?: string | null) {
 
   const assignGroup = async (groupId: string, effectiveFrom: string, notes?: string) => {
     if (!effectiveUserId) return { error: 'Usuario no autenticado' };
+
+    if (departmentPaused) {
+      return { error: 'Tu departamento tiene un modo operativo activo y no permite registrar descansos en este momento.' };
+    }
 
     if (!groupMode.enabled) {
       return { error: 'Este departamento no tiene grupos de descanso activos.' };
@@ -301,6 +311,7 @@ export function useRestSchedule(targetUserId?: string | null) {
     restGroups,
     currentGroupId,
     groupMode,
+    departmentPaused,
     canUsePersonalSchedule,
     isRestDay,
     validateRestDaysSeparation,

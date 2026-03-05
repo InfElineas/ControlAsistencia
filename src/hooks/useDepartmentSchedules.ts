@@ -109,6 +109,44 @@ export function useDepartmentSchedules() {
     }
   };
 
+
+  const notifyDepartmentPauseModeChange = async (departmentId: string, departmentName: string, isPaused: boolean) => {
+    const { data: memberProfiles, error: membersError } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('department_id', departmentId);
+
+    if (membersError) {
+      throw membersError;
+    }
+
+    if (!memberProfiles || memberProfiles.length === 0) {
+      return;
+    }
+
+    const message = isPaused
+      ? `Se activó un modo operativo en ${departmentName}. No podrás marcar asistencia ni descansos hasta que se desactive.`
+      : `Se desactivó el modo operativo de ${departmentName}. Puedes volver a registrar asistencia y descansos según reglas vigentes.`;
+
+    const notificationsPayload = memberProfiles.map((member) => ({
+      user_id: member.user_id,
+      title: isPaused ? 'Modo operativo activado' : 'Modo operativo desactivado',
+      message,
+      type: isPaused ? ('warning' as const) : ('info' as const),
+      link: '/attendance',
+      metadata: {
+        category: 'department_pause_mode',
+        department_id: departmentId,
+        is_paused: isPaused,
+      },
+    }));
+
+    const { error: notifyError } = await supabase.from('notifications').insert(notificationsPayload);
+    if (notifyError) {
+      throw notifyError;
+    }
+  };
+
   const updateSchedule = async (
     departmentId: string,
     scheduleData: {
@@ -167,6 +205,8 @@ export function useDepartmentSchedules() {
 
   const updateDepartmentPause = async (departmentId: string, isPaused: boolean) => {
     try {
+      const department = departmentsWithSchedules.find((item) => item.id === departmentId) ?? null;
+
       const { error } = await supabase
         .from('departments')
         .update({
@@ -176,6 +216,7 @@ export function useDepartmentSchedules() {
 
       if (error) throw error;
 
+      await notifyDepartmentPauseModeChange(departmentId, department?.name ?? 'tu departamento', isPaused);
       await fetchSchedules();
       return { error: null };
     } catch (err: unknown) {
