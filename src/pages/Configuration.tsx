@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, MapPin, Clock, Settings, Save, FileSpreadsheet, Upload, PlusCircle, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mapGenericActionError } from '@/lib/error-messages';
@@ -60,6 +61,7 @@ export default function Configuration() {
     restDaysMinSeparation: 4,
   });
   const [savingGeneral, setSavingGeneral] = useState(false);
+  const [restSeparationDepartmentIds, setRestSeparationDepartmentIds] = useState<string[]>([]);
   const [importingHistory, setImportingHistory] = useState(false);
   const [importSummary, setImportSummary] = useState<AttendanceImportSummary | null>(null);
   const [workLocations, setWorkLocations] = useState<WorkLocation[]>([]);
@@ -73,7 +75,7 @@ export default function Configuration() {
       const { data, error } = await supabase
         .from('app_config')
         .select('key, value')
-        .in('key', ['include_heads_in_global_reports', 'late_tolerance_minutes', 'vacation_days_per_worked_day', 'global_timezone', 'rest_days_min_separation']);
+        .in('key', ['include_heads_in_global_reports', 'late_tolerance_minutes', 'vacation_days_per_worked_day', 'global_timezone', 'rest_days_min_separation', 'rest_days_min_separation_departments']);
 
       if (error) {
         toast.error(mapGenericActionError(error, 'No se pudo cargar la configuración general.'));
@@ -85,6 +87,7 @@ export default function Configuration() {
       const vacationRate = data?.find((item) => item.key === 'vacation_days_per_worked_day')?.value;
       const globalTimezone = data?.find((item) => item.key === 'global_timezone')?.value;
       const restDaysMinSeparation = data?.find((item) => item.key === 'rest_days_min_separation')?.value;
+      const restDaysMinSeparationDepartments = data?.find((item) => item.key === 'rest_days_min_separation_departments')?.value;
 
       setGeneralConfig({
         includeHeadsInGlobalReports: typeof includeHeads === 'boolean' ? includeHeads : false,
@@ -93,6 +96,12 @@ export default function Configuration() {
         globalTimezone: typeof globalTimezone === 'string' ? globalTimezone : 'America/Lima',
         restDaysMinSeparation: typeof restDaysMinSeparation === 'number' ? restDaysMinSeparation : 4,
       });
+
+      if (Array.isArray(restDaysMinSeparationDepartments)) {
+        setRestSeparationDepartmentIds(restDaysMinSeparationDepartments.filter((value): value is string => typeof value === 'string'));
+      } else {
+        setRestSeparationDepartmentIds([]);
+      }
     };
 
     fetchGeneralConfig();
@@ -250,6 +259,16 @@ export default function Configuration() {
     toast.success('Ubicación eliminada.');
   };
 
+
+  const toggleRestSeparationDepartment = (departmentId: string, checked: boolean) => {
+    setRestSeparationDepartmentIds((current) => {
+      if (checked) {
+        return Array.from(new Set([...current, departmentId]));
+      }
+      return current.filter((id) => id !== departmentId);
+    });
+  };
+
   const handleSaveGeneral = async () => {
     setSavingGeneral(true);
 
@@ -275,6 +294,13 @@ export default function Configuration() {
           .from('app_config')
           .update({ value: Math.max(1, Math.round(generalConfig.restDaysMinSeparation)) })
           .eq('key', 'rest_days_min_separation'),
+        supabase
+          .from('app_config')
+          .upsert({
+            key: 'rest_days_min_separation_departments',
+            value: restSeparationDepartmentIds,
+            description: 'Departamentos donde aplica la separación mínima de descansos. Vacío = todos.'
+          }, { onConflict: 'key' }),
       ];
 
       const results = await Promise.all(updates);
@@ -707,8 +733,26 @@ export default function Configuration() {
                     }
                   />
                   <p className="text-xs text-muted-foreground">
-                    Define cuántos días de separación mínima habrá entre descansos semanales (parametrizable por centro de trabajo).
+                    Define cuántos días de separación mínima habrá entre descansos semanales.
                   </p>
+
+                  <div className="rounded-md border p-3 space-y-2">
+                    <p className="text-sm font-medium">Departamentos donde aplica esta regla</p>
+                    <p className="text-xs text-muted-foreground">
+                      Si no seleccionas ninguno, la regla aplica a todos los departamentos.
+                    </p>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {departmentsWithSchedules.map((department) => (
+                        <label key={department.id} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={restSeparationDepartmentIds.includes(department.id)}
+                            onCheckedChange={(value) => toggleRestSeparationDepartment(department.id, Boolean(value))}
+                          />
+                          <span>{department.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   </div>
                 </div>
 

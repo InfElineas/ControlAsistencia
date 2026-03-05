@@ -37,22 +37,29 @@ export function useRestSchedule(targetUserId?: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [minRestDaysSeparation, setMinRestDaysSeparation] = useState(4);
+  const [enforceMinRestDaysSeparation, setEnforceMinRestDaysSeparation] = useState(true);
   const [departmentPaused, setDepartmentPaused] = useState(false);
 
   const fetchSchedules = useCallback(async () => {
     if (!effectiveUserId) return;
 
     try {
-      const { data: appConfigData } = await supabase
+      const { data: appConfigRows } = await supabase
         .from('app_config')
-        .select('value')
-        .eq('key', 'rest_days_min_separation')
-        .maybeSingle();
+        .select('key, value')
+        .in('key', ['rest_days_min_separation', 'rest_days_min_separation_departments']);
 
-      const configuredSeparation = appConfigData?.value;
+      const configuredSeparation = appConfigRows?.find((item) => item.key === 'rest_days_min_separation')?.value;
+      const configuredDepartments = appConfigRows?.find((item) => item.key === 'rest_days_min_separation_departments')?.value;
+
       if (typeof configuredSeparation === 'number' && Number.isFinite(configuredSeparation) && configuredSeparation >= 1) {
         setMinRestDaysSeparation(Math.round(configuredSeparation));
       }
+
+      const scopedDepartmentIds = Array.isArray(configuredDepartments)
+        ? configuredDepartments.filter((value): value is string => typeof value === 'string')
+        : [];
+
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('department_id')
@@ -62,6 +69,9 @@ export function useRestSchedule(targetUserId?: string | null) {
       if (profileError) throw profileError;
 
       const departmentId = profileData.department_id;
+      const shouldEnforceSeparation = scopedDepartmentIds.length === 0 || scopedDepartmentIds.includes(departmentId);
+      setEnforceMinRestDaysSeparation(shouldEnforceSeparation);
+
       const { data: departmentData, error: departmentError } = await supabase
         .from('departments')
         .select('name, rest_groups_enabled, is_paused')
@@ -160,7 +170,7 @@ export function useRestSchedule(targetUserId?: string | null) {
   }, [effectiveUserId, fetchSchedules]);
 
   const validateRestDaysSeparation = (daysOfWeek: number[]): { valid: boolean; error?: string } => {
-    if (daysOfWeek.length < 2) return { valid: true };
+    if (!enforceMinRestDaysSeparation || daysOfWeek.length < 2) return { valid: true };
 
     const sortedDays = [...daysOfWeek].sort((a, b) => a - b);
 
