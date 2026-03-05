@@ -389,8 +389,12 @@ export default function UserManagement() {
     try {
       setDeleting(true);
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
       const { data, error } = await supabase.functions.invoke('delete-user', {
         body: { user_id: deletingUser.user_id },
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
       if (error) throw error;

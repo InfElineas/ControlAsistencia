@@ -25,7 +25,7 @@ serve(async (req: Request): Promise<Response> => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const accessToken = authHeader.replace("Bearer ", "").trim();
+    const accessToken = authHeader.replace(/^Bearer\s+/i, "").trim();
     if (!accessToken) {
       throw new Error("Unauthorized");
     }
