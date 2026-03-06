@@ -15,6 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Users,
   UserCheck,
@@ -30,6 +31,7 @@ import { es } from 'date-fns/locale';
 import { exportToXLSX, AttendanceReportRow, formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
+import { useManagedDepartments } from '@/hooks/useManagedDepartments';
 
 interface DepartmentEmployee {
   id: string;
@@ -61,10 +63,12 @@ interface AttendanceSummary {
 }
 
 export default function Department() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
+  const { departments: managedDepartments } = useManagedDepartments(user?.id, profile?.department_id);
   const [employees, setEmployees] = useState<DepartmentEmployee[]>([]);
   const [attendance, setAttendance] = useState<AttendanceSummary[]>([]);
   const [departmentName, setDepartmentName] = useState('');
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   const [departmentPaused, setDepartmentPaused] = useState(false);
   const [departmentSchedule, setDepartmentSchedule] = useState<{ checkin_end_time: string | null; timezone: string | null }>({
     checkin_end_time: null,
@@ -80,7 +84,7 @@ export default function Department() {
   });
 
   const fetchData = useCallback(async () => {
-    if (!profile?.department_id) return;
+    if (!selectedDepartmentId) return;
     setLoading(true);
 
     let currentDepartmentPaused = false;
@@ -89,13 +93,13 @@ export default function Department() {
     const { data: deptData } = await supabase
       .from('departments')
       .select('name, is_paused')
-      .eq('id', profile.department_id)
+      .eq('id', selectedDepartmentId)
       .single();
 
     const { data: scheduleData } = await supabase
       .from('department_schedules')
       .select('checkin_end_time, timezone')
-      .eq('department_id', profile.department_id)
+      .eq('department_id', selectedDepartmentId)
       .maybeSingle();
 
     setDepartmentSchedule({
@@ -113,7 +117,7 @@ export default function Department() {
     const { data: empData } = await supabase
       .from('profiles')
       .select('id, user_id, full_name, email, phone')
-      .eq('department_id', profile.department_id);
+      .eq('department_id', selectedDepartmentId);
 
     // Filter out department heads and global managers from attendance statistics
     const { data: excludedRoles } = await supabase
@@ -191,13 +195,26 @@ export default function Department() {
     }
 
     setLoading(false);
-  }, [profile?.department_id]);
+  }, [selectedDepartmentId]);
 
   useEffect(() => {
-    if (profile?.department_id) {
+    if (managedDepartments.length === 0) {
+      setSelectedDepartmentId('');
+      return;
+    }
+
+    setSelectedDepartmentId((current) =>
+      current && managedDepartments.some((department) => department.id === current)
+        ? current
+        : managedDepartments[0].id
+    );
+  }, [managedDepartments]);
+
+  useEffect(() => {
+    if (selectedDepartmentId) {
       fetchData();
     }
-  }, [profile?.department_id, fetchData]);
+  }, [selectedDepartmentId, fetchData]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -388,6 +405,28 @@ export default function Department() {
             </Button>
           </div>
         </div>
+
+        {managedDepartments.length > 1 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Departamento activo</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={selectedDepartmentId} onValueChange={setSelectedDepartmentId}>
+                <SelectTrigger className="max-w-sm">
+                  <SelectValue placeholder="Selecciona un departamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  {managedDepartments.map((department) => (
+                    <SelectItem key={department.id} value={department.id}>
+                      {department.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Metrics */}
         <div className="grid gap-4 sm:grid-cols-3">

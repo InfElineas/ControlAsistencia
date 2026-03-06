@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth, AppRole } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -45,6 +45,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useDepartments } from '@/hooks/useDepartments';
 import { Loader2, UserPlus, Shield, Users, Edit, Filter, Trash2 } from 'lucide-react';
 import { z } from 'zod';
+import { Checkbox } from '@/components/ui/checkbox';
 import { getHighestRole } from '@/lib/roles';
 
 interface FunctionErrorPayload {
@@ -75,7 +76,11 @@ interface UserWithRole {
   department_id: string;
   department_name?: string;
   role: AppRole;
+  managed_department_ids: string[];
+  managed_department_names: string[];
 }
+
+const USERS_PAGE_SIZE = 10;
 
 const createUserSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -96,18 +101,26 @@ export default function UserManagement() {
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [selectedRole, setSelectedRole] = useState<AppRole>('employee');
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [selectedManagedDepartments, setSelectedManagedDepartments] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   
   // Filters
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterRole, setFilterRole] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
   
   const filteredUsers = users.filter(user => {
     const matchesDepartment = filterDepartment === 'all' || user.department_id === filterDepartment;
     const matchesRole = filterRole === 'all' || user.role === filterRole;
     return matchesDepartment && matchesRole;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PAGE_SIZE));
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * USERS_PAGE_SIZE;
+    return filteredUsers.slice(start, start + USERS_PAGE_SIZE);
+  }, [currentPage, filteredUsers]);
   
   // Create user state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -139,6 +152,12 @@ export default function UserManagement() {
 
       if (rolesError) throw rolesError;
 
+      const { data: managedDepartmentsData, error: managedDepartmentsError } = await supabase
+        .from('user_department_responsibilities')
+        .select('user_id, department_id');
+
+      if (managedDepartmentsError) throw managedDepartmentsError;
+
       const rolesByUser = (roles ?? []).reduce<Record<string, string[]>>((acc, row) => {
         if (!acc[row.user_id]) {
           acc[row.user_id] = [];
@@ -150,6 +169,15 @@ export default function UserManagement() {
       const usersWithRoles: UserWithRole[] = (profiles || []).map(profile => {
         const dept = departments.find(d => d.id === profile.department_id);
         const roleForUser = getHighestRole(rolesByUser[profile.user_id] ?? []);
+        const extraDepartmentIds = (managedDepartmentsData || [])
+          .filter((row) => row.user_id === profile.user_id)
+          .map((row) => row.department_id)
+          .filter((departmentId) => departmentId !== profile.department_id);
+
+        const managedDepartmentIds = Array.from(new Set([profile.department_id, ...extraDepartmentIds]));
+        const managedDepartmentNames = managedDepartmentIds
+          .map((departmentId) => departments.find((department) => department.id === departmentId)?.name)
+          .filter((name): name is string => Boolean(name));
 
         return {
           id: profile.id,
@@ -159,6 +187,8 @@ export default function UserManagement() {
           department_id: profile.department_id,
           department_name: dept?.name || 'Sin departamento',
           role: roleForUser as AppRole,
+          managed_department_ids: managedDepartmentIds,
+          managed_department_names: managedDepartmentNames,
         };
       });
 
@@ -180,11 +210,34 @@ export default function UserManagement() {
     }
   }, [departments, fetchUsers]);
 
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterDepartment, filterRole]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+
   const handleEditUser = (user: UserWithRole) => {
     setEditingUser(user);
     setSelectedRole(user.role);
     setSelectedDepartment(user.department_id);
+    setSelectedManagedDepartments(user.managed_department_ids);
     setDialogOpen(true);
+  };
+
+
+  const toggleManagedDepartment = (departmentId: string, checked: boolean) => {
+    setSelectedManagedDepartments((current) => {
+      if (checked) {
+        return Array.from(new Set([...current, departmentId]));
+      }
+      return current.filter((item) => item !== departmentId);
+    });
   };
 
   const handleSaveUser = async () => {
@@ -213,6 +266,33 @@ export default function UserManagement() {
 
       if (insertError) throw insertError;
 
+      const { error: deleteResponsibilitiesError } = await supabase
+        .from('user_department_responsibilities')
+        .delete()
+        .eq('user_id', editingUser.user_id);
+
+      if (deleteResponsibilitiesError) throw deleteResponsibilitiesError;
+
+      if (selectedRole === 'department_head') {
+        const extraDepartments = selectedManagedDepartments.filter(
+          (departmentId) => departmentId !== selectedDepartment
+        );
+
+        if (extraDepartments.length > 0) {
+          const { error: insertResponsibilitiesError } = await supabase
+            .from('user_department_responsibilities')
+            .insert(
+              extraDepartments.map((departmentId) => ({
+                user_id: editingUser.user_id,
+                department_id: departmentId,
+                created_by: currentUser?.id ?? null,
+              }))
+            );
+
+          if (insertResponsibilitiesError) throw insertResponsibilitiesError;
+        }
+      }
+
       await supabase.from('audit_log').insert({
         user_id: currentUser?.id ?? null,
         action: 'role_changed',
@@ -220,8 +300,8 @@ export default function UserManagement() {
         metadata: { actor_role: role ?? 'unknown' },
         table_name: 'user_roles',
         record_id: editingUser.user_id,
-        old_data: { role: editingUser.role, department_id: editingUser.department_id },
-        new_data: { role: selectedRole, department_id: selectedDepartment },
+        old_data: { role: editingUser.role, department_id: editingUser.department_id, managed_department_ids: editingUser.managed_department_ids },
+        new_data: { role: selectedRole, department_id: selectedDepartment, managed_department_ids: selectedManagedDepartments },
       });
 
       toast({
@@ -309,8 +389,12 @@ export default function UserManagement() {
     try {
       setDeleting(true);
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
       const { data, error } = await supabase.functions.invoke('delete-user', {
         body: { user_id: deletingUser.user_id },
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
       if (error) throw error;
@@ -463,6 +547,7 @@ export default function UserManagement() {
                 {users.length === 0 ? 'No hay usuarios registrados' : 'No hay usuarios que coincidan con los filtros'}
               </div>
             ) : (
+              <>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -474,11 +559,20 @@ export default function UserManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
+                  {paginatedUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.full_name}</TableCell>
                       <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.department_name}</TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <div>{user.department_name}</div>
+                          {user.role === 'department_head' && user.managed_department_names.length > 1 && (
+                            <p className="text-xs text-muted-foreground">
+                              Responsable también de: {user.managed_department_names.filter((name) => name !== user.department_name).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -508,6 +602,31 @@ export default function UserManagement() {
                   ))}
                 </TableBody>
               </Table>
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-muted-foreground">
+                  Mostrando {(currentPage - 1) * USERS_PAGE_SIZE + 1}-{Math.min(currentPage * USERS_PAGE_SIZE, filteredUsers.length)} de {filteredUsers.length} usuarios
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage <= 1}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage >= totalPages}
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -518,7 +637,7 @@ export default function UserManagement() {
             <DialogHeader>
               <DialogTitle>Editar Usuario</DialogTitle>
               <DialogDescription>
-                Modifica el rol y departamento del usuario
+                Modifica el rol, departamento principal y responsabilidades adicionales
               </DialogDescription>
             </DialogHeader>
             
@@ -536,7 +655,10 @@ export default function UserManagement() {
                 
                 <div className="space-y-2">
                   <Label>Departamento</Label>
-                  <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                  <Select value={selectedDepartment} onValueChange={(value) => {
+                    setSelectedDepartment(value);
+                    setSelectedManagedDepartments((current) => Array.from(new Set([value, ...current])));
+                  }}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona departamento" />
                     </SelectTrigger>
@@ -564,6 +686,31 @@ export default function UserManagement() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {selectedRole === 'department_head' && (
+                  <div className="space-y-2">
+                    <Label>Departamentos bajo su responsabilidad</Label>
+                    <div className="max-h-48 overflow-auto rounded-md border p-3 space-y-3">
+                      {departments.map((department) => {
+                        const checked = selectedManagedDepartments.includes(department.id) || department.id === selectedDepartment;
+                        return (
+                          <label key={department.id} className="flex items-center gap-3 text-sm">
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(value) => toggleManagedDepartment(department.id, Boolean(value))}
+                              disabled={department.id === selectedDepartment}
+                            />
+                            <span>
+                              {department.name}
+                              {department.id === selectedDepartment ? ' (principal)' : ''}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Solo superadmin y gestor global pueden gestionar estas responsabilidades múltiples.</p>
+                  </div>
+                )}
               </div>
             )}
             
