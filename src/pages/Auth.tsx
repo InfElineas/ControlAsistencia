@@ -57,28 +57,32 @@ export default function Auth() {
 
     try {
       if (isLogin) {
-        const result = loginSchema.safeParse({ email, password });
+        const normalizedEmail = email.trim().toLowerCase();
+        const result = loginSchema.safeParse({ email: normalizedEmail, password });
         if (!result.success) {
           setError(result.error.errors[0].message);
           setLoading(false);
           return;
         }
 
-        const { error } = await signIn(email, password);
+        const { error } = await signIn(normalizedEmail, password);
         if (error) {
           setError(mapAuthError(error, 'signin'));
           setLoading(false);
           return;
         }
       } else {
-        const result = signupSchema.safeParse({ email, password, fullName, phone, departmentId });
+        const normalizedEmail = email.trim().toLowerCase();
+        const normalizedFullName = fullName.trim();
+        const normalizedPhone = phone.trim();
+        const result = signupSchema.safeParse({ email: normalizedEmail, password, fullName: normalizedFullName, phone: normalizedPhone, departmentId });
         if (!result.success) {
           setError(result.error.errors[0].message);
           setLoading(false);
           return;
         }
 
-        const { error } = await signUp(email, password, fullName, departmentId, phone);
+        const { error } = await signUp(normalizedEmail, password, normalizedFullName, departmentId, normalizedPhone);
         if (error) {
           setError(mapAuthError(error, 'signup'));
           setLoading(false);

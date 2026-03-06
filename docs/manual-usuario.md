@@ -1,140 +1,241 @@
-# Manual de Usuario (Guía simple)
+# Manual de Usuario (Guía práctica)
 
 > Este manual está pensado para personas con poca experiencia en tecnología.
-> Aquí encontrarás pasos claros y directos para usar el sistema **Control de Asistencia ELINEAS**.
+> Aquí encontrarás pasos claros para usar **Control de Asistencia ELINEAS** con las funciones más recientes.
 
 ---
 
 ## 1) ¿Qué puedes hacer en este sistema?
 
-Con este sistema puedes:
+### Como colaborador
 
-- Iniciar sesión en tu cuenta.
-- Marcar tu **entrada** y **salida**.
-- Revisar tu historial de marcajes.
-- Solicitar vacaciones (si tu rol lo permite).
-- Actualizar tu perfil.
+- Iniciar sesión.
+- Marcar **entrada** y **salida**.
+- Seleccionar una **ubicación de trabajo** antes de marcar (si tu empresa la usa).
+- Revisar historial de marcajes.
+- Crear incidencias sobre tus marcajes (ejemplo: olvidé marcar, tardanza, salida temprana).
+- Gestionar tu perfil y cambiar tu contraseña.
+- Solicitar vacaciones o días de descanso (según permisos).
 
-Si eres jefe o gestor, además puedes:
+### Como jefe de departamento / gestor
 
-- Ver reportes del personal.
-- Gestionar usuarios.
-- Marcar ausencias como justificadas o no justificadas.
+Además de lo anterior, puedes:
+
+- Crear incidencias para usuarios de tus departamentos.
+- Aprobar o rechazar incidencias creadas por los colaboradores.
+- Marcar ausencias como **justificadas** o **no justificadas**.
+- Gestionar horarios por departamento (si tienes permisos).
+
+### Como superadmin
+
+Además de lo anterior, puedes:
+
+- Administrar usuarios (crear, editar, eliminar).
+- Configurar parámetros globales del sistema (zona horaria, modo de salida automática, etc.).
+- Usar herramientas de administración y auditoría.
 
 ---
 
 ## 2) Requisitos mínimos
 
-Antes de empezar:
-
-- Tener internet estable.
-- Tener usuario y contraseña.
-- Usar navegador actualizado (Chrome, Edge, Firefox o Safari).
-- Si marcas asistencia por ubicación, permitir GPS/ubicación.
+- Internet estable.
+- Usuario y contraseña activos.
+- Navegador actualizado (Chrome, Edge, Firefox o Safari).
+- Si marcas asistencia por ubicación, debes permitir acceso al GPS/ubicación.
 
 ---
 
 ## 3) Iniciar sesión
 
-1. Abre el enlace del sistema en tu navegador.
+1. Abre el enlace del sistema.
 2. Escribe tu **correo** y **contraseña**.
 3. Pulsa **Iniciar sesión**.
 
-### Si no recuerdas tu contraseña
+### Si no recuerdas la contraseña
 
-- Contacta al administrador del sistema para restablecerla.
+- Pide ayuda al administrador del sistema.
+- Si tu organización lo habilitó, también pueden enviarte correo de restablecimiento.
 
-### Consejo
+### Si ves error al entrar (por ejemplo, 400)
 
-- En el campo contraseña puedes usar el ícono de “ojo” para ver lo que escribes.
+1. Revisa correo/contraseña (incluyendo mayúsculas/minúsculas).
+2. Borra caché del navegador o prueba una ventana privada.
+3. Cierra sesión en otras pestañas y vuelve a intentar.
+4. Si persiste, contacta soporte con captura de pantalla y hora del error.
 
 ---
 
 ## 4) Marcar asistencia (Entrada / Salida)
 
-1. Ve al menú y entra en **Marcar**.
-2. Verifica que tu ubicación esté activa.
-3. Pulsa el botón para registrar:
-   - **Entrada**, cuando inicias jornada.
-   - **Salida**, cuando terminas jornada.
+1. Entra a la opción **Marcar**.
+2. Verifica que la ubicación (GPS) esté activa.
+3. **Selecciona la ubicación de trabajo** (si aparece el selector).
+4. Pulsa el botón de:
+   - **Entrada** al iniciar la jornada.
+   - **Salida** al terminar.
 
-### Posibles mensajes
+### Mensajes comunes
 
 - **"Entrada registrada correctamente"**: todo bien.
-- **"Entrada registrada con tardanza"**: tu entrada fue después del horario.
-- **"Debes estar dentro de la zona autorizada"**: estás fuera del área permitida.
+- **"Entrada registrada con tardanza"**: marcaste después de la hora esperada.
+- **"Debes estar dentro de la zona autorizada"**: estás fuera del perímetro permitido.
+- **"Precisión de GPS insuficiente"**: intenta moverte a un lugar con mejor señal.
+
+### Nota sobre salida automática
+
+Tu empresa puede definir el cierre de jornada en 3 modos:
+
+- **Manual**: tú haces la salida.
+- **Por horario**: salida automática a una hora global.
+- **Por salida de geocerca**: salida automática si sales del área por varios minutos.
+
+Si no estás seguro de cuál aplica, consulta a tu administrador.
 
 ---
 
-## 5) Ver historial personal
+## 5) Ubicaciones de trabajo (Work Locations)
+
+Si tu empresa maneja sedes/zonas:
+
+- Debes elegir la sede correcta antes de marcar.
+- Cada sede puede tener su propio radio y precisión GPS requerida.
+- Si cambias de sede, actualiza la selección antes de registrar asistencia.
+
+> La selección suele mantenerse entre pestañas/ventanas del navegador.
+
+---
+
+## 6) Ver historial personal
 
 1. Entra a **Mi Historial**.
-2. Revisa fechas, horas y estado de tus marcajes.
-
-Si notas un error en un día, avisa a tu jefe o gestor.
-
----
-
-## 6) Perfil de usuario
-
-1. Entra a **Mi perfil**.
-2. Revisa tus datos (nombre, teléfono, correo, departamento).
-3. Actualiza y guarda cambios.
+2. Revisa fechas, horas y estado de cada marcaje.
+3. Si detectas un error, crea una incidencia o avisa a tu jefe.
 
 ---
 
-## 7) Vacaciones (cuando aplique)
+## 7) Incidencias (colaborador y jefatura)
 
-1. Ve a **Vacaciones**.
-2. Crea una solicitud con fecha de inicio y fin.
-3. Espera revisión del jefe/gestor.
+### 7.1 Crear incidencia (colaborador)
 
-Estados comunes:
+1. Ve a la sección de **Incidencias**.
+2. Selecciona el tipo (ejemplo: olvidé marcar, tardanza, salida temprana).
+3. Agrega un motivo claro.
+4. Guarda la solicitud.
 
-- **Pendiente**: aún no revisada.
-- **Aprobada**: aceptada.
-- **Rechazada**: no aprobada.
+Estado inicial: **Pendiente**.
+
+### 7.2 Revisión de incidencias (jefe/gestor)
+
+- El jefe/gestor revisa incidencias del personal a su cargo.
+- Puede **aprobar** o **rechazar** y dejar observaciones.
+- El colaborador recibe el resultado.
+
+### 7.3 Incidencia creada por jefatura
+
+- El jefe/gestor también puede **registrar incidencias directamente** para un trabajador.
+- Luego la incidencia sigue su flujo de revisión según configuración interna.
 
 ---
 
-## 8) Reportes (jefes y gestores)
+## 8) Vacaciones y descansos
+
+1. Entra a **Vacaciones** o **Descansos** (según módulo habilitado).
+2. Crea tu solicitud con fechas.
+3. Espera revisión.
+
+Estados:
+
+- **Pendiente**
+- **Aprobada**
+- **Rechazada**
+
+### Regla de separación mínima entre descansos
+
+- El sistema puede exigir una cantidad mínima de días entre descansos.
+- Esta regla puede aplicarse solo a **departamentos específicos** (no necesariamente a todos).
+- Si tu solicitud se bloquea, consulta con RRHH/jefatura si tu departamento está incluido en esa regla.
+
+### Modo departamento sin descanso (pausado)
+
+- Tu departamento puede estar temporalmente en modo **sin descanso**.
+- En ese periodo no podrás registrar nuevos descansos/vacaciones según la política configurada.
+
+---
+
+## 9) Perfil de usuario
+
+Desde **Mi perfil** puedes:
+
+- Ver y actualizar datos personales (nombre, teléfono, etc.).
+- Cambiar contraseña desde la opción de seguridad.
+
+Recomendación:
+
+- Usa una contraseña fuerte y no la compartas.
+
+---
+
+## 10) Reportes (jefes y gestores)
 
 En reportes podrás ver:
 
 - Estado diario del personal.
-- Tardanzas.
-- Entradas/salidas.
-- Geocerca (si aplica).
-- Ausencias justificadas/no justificadas.
+- Entradas/salidas y tardanzas.
+- Geocerca / ubicación (si aplica).
+- Ausencias justificadas y no justificadas.
 
-También puedes exportar a **Excel (XLSX)**.
+También puedes exportar a **Excel (XLSX)** cuando la opción esté habilitada.
 
 ---
 
-## 9) Justificar ausencias (jefes/gestores)
+## 11) Gestión de ausencias (jefes/gestores)
 
-Cuando un colaborador aparece como ausente, puedes marcar:
+Cuando un colaborador aparece ausente, puedes marcar la ausencia como:
 
 - **Justificada**
 - **No justificada**
 
-Esto ayuda a tener reportes claros y ordenados.
+Esto impacta reportes y seguimiento de cumplimiento.
 
 ---
 
-## 10) Gestión de usuarios (solo gestor global)
+## 12) Gestión de usuarios (superadmin)
 
-Desde **Usuarios** puedes:
+Desde el módulo de usuarios, el superadmin puede:
 
 - Crear usuarios.
-- Editar rol/departamento.
+- Editar rol y departamento.
 - Eliminar usuarios (con confirmación).
 
-> Recomendación: elimina usuarios solo cuando sea necesario.
+### Si no se puede eliminar un usuario
+
+A veces la eliminación falla por dependencias internas (auditoría, sesiones, identidades, etc.).
+
+Buenas prácticas:
+
+1. Intenta desde el panel con rol **superadmin**.
+2. Si falla, revisa el mensaje exacto.
+3. Escala a soporte técnico/Supabase para limpieza segura de dependencias.
+4. Como último recurso, usar una limpieza transaccional en base de datos por personal técnico autorizado.
+
+> Evita ejecutar borrados manuales si no tienes experiencia, porque puedes afectar integridad de datos.
 
 ---
 
-## 11) Problemas comunes y solución rápida
+## 13) Configuración global (superadmin/configuración)
+
+Tu organización puede configurar:
+
+- Zona horaria global del sistema.
+- Tolerancia de tardanza.
+- Modo de salida automática.
+- Separación mínima de descansos y departamentos a los que aplica.
+
+Si notas comportamientos distintos entre departamentos, puede deberse a esta configuración.
+
+---
+
+## 14) Problemas comunes y solución rápida
 
 ### A) Pantalla en blanco o no carga
 
@@ -147,46 +248,50 @@ Desde **Usuarios** puedes:
 
 - Revisa internet.
 - Activa ubicación GPS.
-- Verifica que estés dentro de la zona permitida.
+- Verifica que seleccionaste la ubicación de trabajo correcta.
+- Confirma que estás dentro de la zona permitida.
 
-### C) No te deja iniciar sesión
+### C) No deja crear descanso/vacación
 
-- Revisa correo y contraseña.
-- Verifica mayúsculas/minúsculas.
-- Pide ayuda para resetear contraseña.
+- Verifica si tu departamento está en modo pausado/sin descanso.
+- Revisa separación mínima de días entre descansos.
 
 ### D) No se puede eliminar usuario
 
-- Verifica que seas **gestor global**.
-- Puede que la cuenta tenga restricciones del sistema.
-- Contacta al soporte técnico si persiste.
+- Confirma que eres superadmin.
+- Verifica que no sea el último superadmin.
+- Si persiste, requiere revisión técnica de dependencias.
 
 ---
 
-## 12) Buenas prácticas
+## 15) Buenas prácticas
 
 - No compartas tu contraseña.
 - Cierra sesión en equipos compartidos.
 - Marca asistencia apenas llegues/salgas.
-- Reporta errores con captura de pantalla y hora del problema.
+- Mantén activo GPS al marcar (si aplica).
+- Reporta errores con captura y hora exacta.
 
 ---
 
-## 13) Glosario rápido
+## 16) Glosario rápido
 
 - **Entrada**: primer marcaje del día al iniciar jornada.
 - **Salida**: marcaje al terminar jornada.
 - **Tardanza**: entrada después del horario definido.
-- **Geocerca**: zona de ubicación permitida para marcar.
+- **Geocerca**: zona permitida para marcar por ubicación.
+- **Incidencia**: solicitud/reporte por marcaje irregular.
 - **Ausencia justificada**: falta con motivo aceptado.
+- **Departamento pausado / sin descanso**: estado temporal que bloquea solicitudes de descanso.
 
 ---
 
-## 14) Contacto de soporte
+## 17) Contacto de soporte
 
-Si necesitas ayuda, contacta al administrador interno de tu empresa e incluye:
+Cuando reportes un problema, incluye:
 
 - Tu nombre y correo.
 - Hora aproximada del problema.
 - Qué estabas intentando hacer.
 - Captura de pantalla (si es posible).
+- Mensaje exacto del error.
