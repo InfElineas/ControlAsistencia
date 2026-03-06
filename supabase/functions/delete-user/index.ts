@@ -92,10 +92,17 @@ serve(async (req: Request): Promise<Response> => {
       }
     }
 
+
+    await adminClient.from("audit_log").update({ user_id: null }).eq("user_id", user_id);
+    await adminClient.from("attendance_absence_reviews").update({ reviewed_by: null }).eq("reviewed_by", user_id);
+    await adminClient.from("attendance_incidents").update({ reviewed_by: null }).eq("reviewed_by", user_id);
+    await adminClient.from("vacation_requests").update({ reviewed_by: null }).eq("reviewed_by", user_id);
+    await adminClient.from("geofence_config").update({ updated_by: null }).eq("updated_by", user_id);
+
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(user_id);
 
     if (deleteError) {
-      throw deleteError;
+      throw new Error(`No se pudo eliminar el usuario desde Auth Admin: ${deleteError.message}`);
     }
 
     await adminClient.from("audit_log").insert({

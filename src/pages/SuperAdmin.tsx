@@ -302,24 +302,57 @@ export default function SuperAdmin() {
     }
   };
 
+
+
+  const splitExecutableSqlStatements = (query: string) => {
+    return query
+      .split(';')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0)
+      .filter((part) => !/^(begin|commit|rollback)$/i.test(part));
+  };
+
   const runSqlQuery = async () => {
     try {
       setRunningSql(true);
-      const { data, error } = await supabase.rpc('execute_superadmin_sql', {
-        _query: sqlQuery,
+      const statements = splitExecutableSqlStatements(sqlQuery);
+
+      if (statements.length === 0) {
+        toast({ title: 'Sin sentencias ejecutables', description: 'Elimina BEGIN/COMMIT o agrega una consulta válida.' });
+        return;
+      }
+
+      let accumulatedRows: Record<string, unknown>[] = [];
+      let accumulatedCount = 0;
+      let lastType: SqlConsoleResult['type'] = 'command';
+
+      for (const statement of statements) {
+        const { data, error } = await supabase.rpc('execute_superadmin_sql', {
+          _query: statement,
+        });
+
+        if (error) throw error;
+
+        const result = data as SqlConsoleResult;
+        lastType = result.type;
+        accumulatedCount += result.row_count || 0;
+        if (result.rows?.length) {
+          accumulatedRows = result.rows;
+        }
+      }
+
+      setSqlResult({
+        type: lastType,
+        row_count: accumulatedCount,
+        rows: accumulatedRows,
       });
-
-      if (error) throw error;
-
-      const result = data as SqlConsoleResult;
-      setSqlResult(result);
-      toast({ title: 'Consulta ejecutada', description: `Filas: ${result.row_count}` });
+      toast({ title: 'Consulta ejecutada', description: `Sentencias: ${statements.length} · Filas afectadas: ${accumulatedCount}` });
     } catch (error) {
       console.error(error);
       void logSystemError('sql_console_error', `Error SQL: ${error instanceof Error ? error.message : 'desconocido'}`, { query: sqlQuery });
       toast({
         title: 'Error SQL',
-        description: 'No se pudo ejecutar la consulta. Revisa sintaxis y permisos.',
+        description: 'No se pudo ejecutar la consulta. Evita comandos de transacción (BEGIN/COMMIT) y revisa sintaxis/permisos.',
         variant: 'destructive',
       });
     } finally {
