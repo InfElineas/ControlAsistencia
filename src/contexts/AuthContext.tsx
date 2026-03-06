@@ -34,6 +34,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function ensureAuthConfig(): string | null {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY) {
+    return 'Configuración incompleta de autenticación. Verifica VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY.';
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -137,14 +144,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
+    const configError = ensureAuthConfig();
+    if (configError) {
+      return { error: new Error(configError) };
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: normalizedEmail,
       password,
     });
     return { error };
   };
 
   const signUp = async (email: string, password: string, fullName: string, departmentId: string, phone: string) => {
+    const configError = ensureAuthConfig();
+    if (configError) {
+      return { error: new Error(configError) };
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
     const redirectUrl = resolveAuthRedirectUrl(window.location.origin);
 
     if (!redirectUrl) {
@@ -154,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     const { error } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
       options: {
         emailRedirectTo: redirectUrl,
@@ -197,12 +216,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailConfirmationRequired = true;
       }
 
+      const departmentIdToSave = role === 'global_manager' || role === 'superadmin'
+        ? input.department_id
+        : profile?.department_id ?? input.department_id;
+
       const { data, error } = await supabase
         .from('profiles')
         .update({
           full_name: input.full_name,
           phone: input.phone,
-          department_id: input.department_id,
+          department_id: departmentIdToSave,
           email: input.email,
         })
         .eq('user_id', user.id)
