@@ -204,6 +204,21 @@ export default function SuperAdmin() {
     [logs]
   );
 
+  const usersById = useMemo(
+    () => users.reduce<Record<string, ManagedUser>>((acc, currentUser) => {
+      acc[currentUser.user_id] = currentUser;
+      return acc;
+    }, {}),
+    [users]
+  );
+
+  const getLogUserLabel = useCallback((userId: string | null) => {
+    if (!userId) return 'N/A';
+    const linkedUser = usersById[userId];
+    if (!linkedUser) return userId;
+    return linkedUser.full_name || linkedUser.email || userId;
+  }, [usersById]);
+
   const sqlColumns = useMemo(() => {
     if (!sqlResult || !sqlResult.rows.length) return [];
     return Object.keys(sqlResult.rows[0]);
@@ -649,7 +664,7 @@ export default function SuperAdmin() {
                   globalManagerLogs.map((item) => (
                     <div key={item.id} className="border rounded-md p-2">
                       <p className="text-sm font-medium">{item.action}</p>
-                      <p className="text-xs text-muted-foreground">User: {item.user_id || 'N/A'} · {item.description || 'Sin descripción'}</p>
+                      <p className="text-xs text-muted-foreground">User: {getLogUserLabel(item.user_id)} · {item.description || 'Sin descripción'}</p>
                     </div>
                   ))
                 )}
@@ -679,7 +694,7 @@ export default function SuperAdmin() {
                 {logs.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="text-xs">{new Date(item.created_at).toLocaleString()}</TableCell>
-                    <TableCell className="text-xs">{item.user_id || 'N/A'}</TableCell>
+                    <TableCell className="text-xs">{getLogUserLabel(item.user_id)}</TableCell>
                     <TableCell className="text-xs">{item.action}</TableCell>
                     <TableCell className="text-xs max-w-[280px] whitespace-pre-wrap">{item.description || 'Sin descripción'}</TableCell>
                     <TableCell className="text-xs">{item.source_ip || 'N/A'}</TableCell>
