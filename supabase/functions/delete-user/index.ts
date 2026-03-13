@@ -93,11 +93,36 @@ serve(async (req: Request): Promise<Response> => {
     }
 
 
-    await adminClient.from("audit_log").update({ user_id: null }).eq("user_id", user_id);
-    await adminClient.from("attendance_absence_reviews").update({ reviewed_by: null }).eq("reviewed_by", user_id);
-    await adminClient.from("attendance_incidents").update({ reviewed_by: null }).eq("reviewed_by", user_id);
-    await adminClient.from("vacation_requests").update({ reviewed_by: null }).eq("reviewed_by", user_id);
-    await adminClient.from("geofence_config").update({ updated_by: null }).eq("updated_by", user_id);
+    const { error: auditUpdateError } = await adminClient
+      .from("audit_log")
+      .update({ user_id: null })
+      .eq("user_id", user_id);
+    if (auditUpdateError) throw auditUpdateError;
+
+    // `attendance_absence_reviews.reviewed_by` es NOT NULL: reasignamos al superadmin ejecutor.
+    const { error: absenceReviewUpdateError } = await adminClient
+      .from("attendance_absence_reviews")
+      .update({ reviewed_by: currentUser.id })
+      .eq("reviewed_by", user_id);
+    if (absenceReviewUpdateError) throw absenceReviewUpdateError;
+
+    const { error: incidentUpdateError } = await adminClient
+      .from("attendance_incidents")
+      .update({ reviewed_by: null })
+      .eq("reviewed_by", user_id);
+    if (incidentUpdateError) throw incidentUpdateError;
+
+    const { error: vacationUpdateError } = await adminClient
+      .from("vacation_requests")
+      .update({ reviewed_by: null })
+      .eq("reviewed_by", user_id);
+    if (vacationUpdateError) throw vacationUpdateError;
+
+    const { error: geofenceUpdateError } = await adminClient
+      .from("geofence_config")
+      .update({ updated_by: null })
+      .eq("updated_by", user_id);
+    if (geofenceUpdateError) throw geofenceUpdateError;
 
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(user_id);
 
@@ -110,7 +135,7 @@ serve(async (req: Request): Promise<Response> => {
       action: "user_deleted",
       description: `Usuario eliminado: ${targetProfile?.email || user_id}`,
       source_ip: sourceIp,
-      metadata: { actor_role: "superadmin" },
+      metadata: { actor_role: "superadmin", target_user_id: user_id },
       table_name: "auth.users",
       record_id: user_id,
       old_data: {
