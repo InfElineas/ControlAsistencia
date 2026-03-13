@@ -99,12 +99,18 @@ serve(async (req: Request): Promise<Response> => {
       .eq("user_id", user_id);
     if (auditUpdateError) throw auditUpdateError;
 
-    // `attendance_absence_reviews.reviewed_by` es NOT NULL: reasignamos al superadmin ejecutor.
+    // Limpiar referencias de revisión para permitir eliminación del usuario en Auth.
     const { error: absenceReviewUpdateError } = await adminClient
       .from("attendance_absence_reviews")
-      .update({ reviewed_by: currentUser.id })
+      .update({ reviewed_by: null })
       .eq("reviewed_by", user_id);
     if (absenceReviewUpdateError) throw absenceReviewUpdateError;
+
+    const { error: responsibilitiesCreatedByUpdateError } = await adminClient
+      .from("user_department_responsibilities")
+      .update({ created_by: null })
+      .eq("created_by", user_id);
+    if (responsibilitiesCreatedByUpdateError) throw responsibilitiesCreatedByUpdateError;
 
     const { error: incidentUpdateError } = await adminClient
       .from("attendance_incidents")
