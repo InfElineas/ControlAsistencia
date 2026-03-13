@@ -41,10 +41,11 @@ import {
 } from 'lucide-react';
 import { format, startOfMonth, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { exportToXLSX, AttendanceReportRow, formatTime } from '@/lib/xlsx-export';
+import { formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { useDepartments } from '@/hooks/useDepartments';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
+import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 
 interface Employee {
   id: string;
@@ -300,34 +301,22 @@ export default function GlobalPanel() {
     setExporting(true);
 
     try {
-      const { data, error } = await supabase.rpc('get_attendance_report_monthly', {
-        _from: dateRange.from,
-        _to: dateRange.to,
-        _department_id: null,
-        _scope: 'global',
-        _include_heads: includeHeadsInGlobalReports,
+      const { data, error } = await supabase.functions.invoke('generate-monthly-report', {
+        body: {
+          from: dateRange.from,
+          to: dateRange.to,
+          scope: 'global',
+          department_id: null,
+          include_heads: includeHeadsInGlobalReports,
+          format: 'csv',
+        },
       });
 
       if (error) throw error;
 
-      const reportData: AttendanceReportRow[] = ((data || []) as AttendanceMonthlyRpcRow[]).map((row) => ({
-        date: row.date,
-        employee_name: row.employee_name,
-        employee_email: row.employee_email,
-        department: row.department,
-        status: row.status,
-        in_time: row.in_timestamp ? formatTime(row.in_timestamp) : null,
-        out_time: row.out_timestamp ? formatTime(row.out_timestamp) : null,
-        lateness_minutes: row.lateness_minutes,
-        absence_justification: row.absence_justification ?? '-',
-        inside_geofence: row.inside_geofence,
-        distance_m: row.distance_m,
-      }));
-
-      exportToXLSX(reportData, `asistencia_global_${dateRange.from}_${dateRange.to}`);
-      toast.success('Reporte global descargado correctamente');
+      toast.success(`Reporte generado. Run ID: ${data?.run_id ?? '-'}`);
     } catch (error) {
-      toast.error('Error al generar el reporte');
+      toast.error('Error al generar el reporte mensual asíncrono');
     }
 
     setExporting(false);
@@ -770,6 +759,8 @@ export default function GlobalPanel() {
             </div>
           </CardContent>
         </Card>
+
+        <ReportRunsCard scope="global" title="Ejecuciones de reportes globales" />
 
         <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
           <DialogContent>

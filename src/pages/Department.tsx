@@ -28,10 +28,11 @@ import {
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { exportToXLSX, AttendanceReportRow, formatTime } from '@/lib/xlsx-export';
+import { formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
+import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 
 interface DepartmentEmployee {
   id: string;
@@ -234,37 +235,21 @@ export default function Department() {
     setExporting(true);
 
     try {
-      const { data, error } = await supabase.rpc('get_attendance_report_monthly', {
-        _from: dateRange.from,
-        _to: dateRange.to,
-        _department_id: selectedDepartmentId,
-        _scope: 'department',
-        _include_heads: false,
+      const { data, error } = await supabase.functions.invoke('generate-monthly-report', {
+        body: {
+          from: dateRange.from,
+          to: dateRange.to,
+          scope: 'department',
+          department_id: selectedDepartmentId,
+          include_heads: false,
+          format: 'csv',
+        },
       });
 
       if (error) throw error;
-
-      const reportData: AttendanceReportRow[] = ((data || []) as AttendanceMonthlyRpcRow[]).map((row) => ({
-        date: row.date,
-        employee_name: row.employee_name,
-        employee_email: row.employee_email,
-        department: row.department || departmentName,
-        status: row.status,
-        in_time: row.in_timestamp ? formatTime(row.in_timestamp) : null,
-        out_time: row.out_timestamp ? formatTime(row.out_timestamp) : null,
-        lateness_minutes: row.lateness_minutes,
-        absence_justification: row.absence_justification ?? '-',
-        inside_geofence: row.inside_geofence,
-        distance_m: row.distance_m,
-      }));
-
-      exportToXLSX(
-        reportData,
-        `asistencia_${departmentName.replace(/\s+/g, '_')}_${dateRange.from}_${dateRange.to}`
-      );
-      toast.success('Reporte descargado correctamente');
+      toast.success(`Reporte generado. Run ID: ${data?.run_id ?? '-'}`);
     } catch (error) {
-      toast.error('Error al generar el reporte');
+      toast.error('Error al generar el reporte mensual asíncrono');
     }
 
     setExporting(false);
@@ -526,6 +511,12 @@ export default function Department() {
             </div>
           </CardContent>
         </Card>
+
+        <ReportRunsCard
+          scope="department"
+          departmentId={selectedDepartmentId || null}
+          title="Ejecuciones de reportes del departamento"
+        />
       </div>
     </AppLayout>
   );

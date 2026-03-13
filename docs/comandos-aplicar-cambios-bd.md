@@ -35,6 +35,9 @@ supabase link --project-ref <TU_PROJECT_REF>
 
 # Empujar migraciones pendientes al remoto
 supabase db push
+
+# Desplegar la Edge Function asíncrona de reportes
+supabase functions deploy generate-monthly-report --no-verify-jwt=false
 ```
 
 ## 4) Validación rápida post-migración
@@ -66,6 +69,12 @@ WHERE schemaname = 'public'
   )
 ORDER BY indexname;
 "
+```
+
+### 4.4 Verificar tabla de trazabilidad de ejecuciones
+
+```bash
+supabase db remote psql -c "\d+ public.report_runs"
 ```
 
 ## 5) Smoke test de la RPC
@@ -103,4 +112,3 @@ Supabase no hace rollback automático de migraciones ya aplicadas. Para revertir
 1. Crear una nueva migración correctiva (`supabase migration new <nombre>`).
 2. Escribir SQL de reversión (drop/alter según corresponda).
 3. Aplicar con `supabase db push`.
-
