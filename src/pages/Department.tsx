@@ -62,6 +62,20 @@ interface AttendanceSummary {
   absenceReview: AbsenceReview | null;
 }
 
+interface AttendanceMonthlyRpcRow {
+  date: string;
+  employee_name: string;
+  employee_email: string;
+  department: string;
+  status: AttendanceReportRow['status'];
+  in_timestamp: string | null;
+  out_timestamp: string | null;
+  lateness_minutes: number | null;
+  absence_justification: AttendanceReportRow['absence_justification'];
+  inside_geofence: boolean | null;
+  distance_m: number | null;
+}
+
 export default function Department() {
   const { profile, user } = useAuth();
   const { departments: managedDepartments } = useManagedDepartments(user?.id, profile?.department_id);
@@ -220,72 +234,29 @@ export default function Department() {
     setExporting(true);
 
     try {
-      const reportData: AttendanceReportRow[] = [];
-      const { data: absenceReviews } = await supabase
-        .from('attendance_absence_reviews')
-        .select('user_id, date, is_justified')
-        .gte('date', dateRange.from)
-        .lte('date', dateRange.to)
-        .in('user_id', employees.map((employee) => employee.user_id));
+      const { data, error } = await supabase.rpc('get_attendance_report_monthly', {
+        _from: dateRange.from,
+        _to: dateRange.to,
+        _department_id: selectedDepartmentId,
+        _scope: 'department',
+        _include_heads: false,
+      });
 
-      const absenceMap = new Map(
-        (absenceReviews || []).map((review) => [
-          `${review.user_id}_${review.date}`,
-          review.is_justified ? 'JUSTIFICADA' : 'NO_JUSTIFICADA',
-        ])
-      );
+      if (error) throw error;
 
-      for (const emp of employees) {
-        const { data: marks } = await supabase
-          .from('attendance_marks')
-          .select('*')
-          .eq('user_id', emp.user_id)
-          .gte('timestamp', `${dateRange.from}T00:00:00`)
-          .lte('timestamp', `${dateRange.to}T23:59:59`)
-          .order('timestamp', { ascending: true });
-
-        // Group by date
-        const byDate: Record<string, typeof marks> = {};
-        marks?.forEach((m) => {
-          const date = m.timestamp.split('T')[0];
-          if (!byDate[date]) byDate[date] = [];
-          byDate[date].push(m);
-        });
-
-        // Generate rows for each date
-        const start = new Date(dateRange.from);
-        const end = new Date(dateRange.to);
-
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateStr = format(d, 'yyyy-MM-dd');
-          const dayMarks = byDate[dateStr] || [];
-          const inMark = dayMarks.find((m) => m.mark_type === 'IN');
-          const outMark = dayMarks.filter((m) => m.mark_type === 'OUT').pop();
-
-          reportData.push({
-            date: dateStr,
-            employee_name: emp.full_name,
-            employee_email: emp.email,
-            department: departmentName,
-            status: departmentPaused
-              ? 'NO_LABORABLE'
-              : inMark
-                ? (calculateLateMinutes(inMark.timestamp, departmentSchedule.checkin_end_time, departmentSchedule.timezone) > 0 ? 'TARDE' : 'PRESENTE')
-                : 'AUSENTE',
-            in_time: inMark ? formatTime(inMark.timestamp) : null,
-            out_time: outMark ? formatTime(outMark.timestamp) : null,
-            lateness_minutes: inMark
-              ? calculateLateMinutes(inMark.timestamp, departmentSchedule.checkin_end_time, departmentSchedule.timezone)
-              : null,
-            absence_justification:
-              !inMark && !departmentPaused
-                ? ((absenceMap.get(`${emp.user_id}_${dateStr}`) as 'JUSTIFICADA' | 'NO_JUSTIFICADA' | undefined) || 'PENDIENTE')
-                : '-',
-            inside_geofence: inMark?.inside_geofence ?? null,
-            distance_m: inMark?.distance_to_center ?? null,
-          });
-        }
-      }
+      const reportData: AttendanceReportRow[] = ((data || []) as AttendanceMonthlyRpcRow[]).map((row) => ({
+        date: row.date,
+        employee_name: row.employee_name,
+        employee_email: row.employee_email,
+        department: row.department || departmentName,
+        status: row.status,
+        in_time: row.in_timestamp ? formatTime(row.in_timestamp) : null,
+        out_time: row.out_timestamp ? formatTime(row.out_timestamp) : null,
+        lateness_minutes: row.lateness_minutes,
+        absence_justification: row.absence_justification ?? '-',
+        inside_geofence: row.inside_geofence,
+        distance_m: row.distance_m,
+      }));
 
       exportToXLSX(
         reportData,
