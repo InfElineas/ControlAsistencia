@@ -28,10 +28,11 @@ import {
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { exportToXLSX, AttendanceReportRow, formatTime } from '@/lib/xlsx-export';
+import { formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
+import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 
 interface DepartmentEmployee {
   id: string;
@@ -220,80 +221,21 @@ export default function Department() {
     setExporting(true);
 
     try {
-      const reportData: AttendanceReportRow[] = [];
-      const { data: absenceReviews } = await supabase
-        .from('attendance_absence_reviews')
-        .select('user_id, date, is_justified')
-        .gte('date', dateRange.from)
-        .lte('date', dateRange.to)
-        .in('user_id', employees.map((employee) => employee.user_id));
+      const { data, error } = await supabase.functions.invoke('generate-monthly-report', {
+        body: {
+          from: dateRange.from,
+          to: dateRange.to,
+          scope: 'department',
+          department_id: selectedDepartmentId,
+          include_heads: false,
+          format: 'csv',
+        },
+      });
 
-      const absenceMap = new Map(
-        (absenceReviews || []).map((review) => [
-          `${review.user_id}_${review.date}`,
-          review.is_justified ? 'JUSTIFICADA' : 'NO_JUSTIFICADA',
-        ])
-      );
-
-      for (const emp of employees) {
-        const { data: marks } = await supabase
-          .from('attendance_marks')
-          .select('*')
-          .eq('user_id', emp.user_id)
-          .gte('timestamp', `${dateRange.from}T00:00:00`)
-          .lte('timestamp', `${dateRange.to}T23:59:59`)
-          .order('timestamp', { ascending: true });
-
-        // Group by date
-        const byDate: Record<string, typeof marks> = {};
-        marks?.forEach((m) => {
-          const date = m.timestamp.split('T')[0];
-          if (!byDate[date]) byDate[date] = [];
-          byDate[date].push(m);
-        });
-
-        // Generate rows for each date
-        const start = new Date(dateRange.from);
-        const end = new Date(dateRange.to);
-
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateStr = format(d, 'yyyy-MM-dd');
-          const dayMarks = byDate[dateStr] || [];
-          const inMark = dayMarks.find((m) => m.mark_type === 'IN');
-          const outMark = dayMarks.filter((m) => m.mark_type === 'OUT').pop();
-
-          reportData.push({
-            date: dateStr,
-            employee_name: emp.full_name,
-            employee_email: emp.email,
-            department: departmentName,
-            status: departmentPaused
-              ? 'NO_LABORABLE'
-              : inMark
-                ? (calculateLateMinutes(inMark.timestamp, departmentSchedule.checkin_end_time, departmentSchedule.timezone) > 0 ? 'TARDE' : 'PRESENTE')
-                : 'AUSENTE',
-            in_time: inMark ? formatTime(inMark.timestamp) : null,
-            out_time: outMark ? formatTime(outMark.timestamp) : null,
-            lateness_minutes: inMark
-              ? calculateLateMinutes(inMark.timestamp, departmentSchedule.checkin_end_time, departmentSchedule.timezone)
-              : null,
-            absence_justification:
-              !inMark && !departmentPaused
-                ? ((absenceMap.get(`${emp.user_id}_${dateStr}`) as 'JUSTIFICADA' | 'NO_JUSTIFICADA' | undefined) || 'PENDIENTE')
-                : '-',
-            inside_geofence: inMark?.inside_geofence ?? null,
-            distance_m: inMark?.distance_to_center ?? null,
-          });
-        }
-      }
-
-      exportToXLSX(
-        reportData,
-        `asistencia_${departmentName.replace(/\s+/g, '_')}_${dateRange.from}_${dateRange.to}`
-      );
-      toast.success('Reporte descargado correctamente');
+      if (error) throw error;
+      toast.success(`Reporte generado. Run ID: ${data?.run_id ?? '-'}`);
     } catch (error) {
-      toast.error('Error al generar el reporte');
+      toast.error('Error al generar el reporte mensual asíncrono');
     }
 
     setExporting(false);
@@ -555,6 +497,12 @@ export default function Department() {
             </div>
           </CardContent>
         </Card>
+
+        <ReportRunsCard
+          scope="department"
+          departmentId={selectedDepartmentId || null}
+          title="Ejecuciones de reportes del departamento"
+        />
       </div>
     </AppLayout>
   );
