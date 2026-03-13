@@ -467,15 +467,40 @@ export default function SuperAdmin() {
 
     try {
       setAccountActionUserId(targetUserId);
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      const accessToken = !refreshError && refreshed.session?.access_token
+        ? refreshed.session.access_token
+        : (await supabase.auth.getSession()).data.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error('Tu sesión expiró. Inicia sesión nuevamente para eliminar usuarios.');
+      }
 
       const { data, error } = await supabase.functions.invoke('delete-user', {
         body: {
           user_id: targetUserId,
         },
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
+
+      if (error && String(error.message || '').toLowerCase().includes('unauthorized')) {
+        const retry = await supabase.auth.refreshSession();
+        const retryToken = retry.data.session?.access_token ?? (await supabase.auth.getSession()).data.session?.access_token;
+        if (!retryToken) throw error;
+
+        const retryResult = await supabase.functions.invoke('delete-user', {
+          body: { user_id: targetUserId },
+          headers: { Authorization: `Bearer ${retryToken}` },
+        });
+
+        if (retryResult.error) throw retryResult.error;
+        if (retryResult.data?.error) throw new Error(retryResult.data.error);
+
+        toast({ title: 'Usuario eliminado', description: 'Cuenta eliminada correctamente.' });
+        await loadData();
+        return;
+      }
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);

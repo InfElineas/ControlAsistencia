@@ -68,6 +68,16 @@ async function resolveFunctionErrorMessage(error: unknown): Promise<string | nul
   }
 }
 
+async function getFreshAccessToken(): Promise<string | null> {
+  const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+  if (!refreshError && refreshed.session?.access_token) {
+    return refreshed.session.access_token;
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  return sessionData.session?.access_token ?? null;
+}
+
 interface UserWithRole {
   id: string;
   user_id: string;
@@ -389,13 +399,39 @@ export default function UserManagement() {
     try {
       setDeleting(true);
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+      const accessToken = await getFreshAccessToken();
+
+      if (!accessToken) {
+        throw new Error('Tu sesión expiró. Inicia sesión nuevamente para eliminar usuarios.');
+      }
 
       const { data, error } = await supabase.functions.invoke('delete-user', {
         body: { user_id: deletingUser.user_id },
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
+
+      if (error && String(error.message || '').toLowerCase().includes('unauthorized')) {
+        const retryToken = await getFreshAccessToken();
+        if (!retryToken) throw error;
+
+        const retryResult = await supabase.functions.invoke('delete-user', {
+          body: { user_id: deletingUser.user_id },
+          headers: { Authorization: `Bearer ${retryToken}` },
+        });
+
+        if (retryResult.error) throw retryResult.error;
+        if (retryResult.data?.error) throw new Error(retryResult.data.error);
+
+        toast({
+          title: 'Usuario eliminado',
+          description: `El usuario ${deletingUser.full_name} fue eliminado correctamente.`,
+        });
+
+        setDeleteDialogOpen(false);
+        setDeletingUser(null);
+        fetchUsers();
+        return;
+      }
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
