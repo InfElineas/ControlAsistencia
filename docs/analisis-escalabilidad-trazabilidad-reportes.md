@@ -174,3 +174,17 @@ Aplicando estas mejoras, el sistema pasa de una reportería "client-heavy" a un 
 - menor costo operacional por consulta,
 - trazabilidad completa y auditable de cada reporte,
 - base lista para crecimiento multi-departamento/multi-sede.
+
+## 9) Nota DBA: evaluación de particionamiento para `attendance_marks`
+
+Para la fase de escala 1000+ empleados, evaluar particionamiento mensual/trimestral cuando se cumpla al menos uno:
+
+- `attendance_marks` > 10M filas,
+- p95 de consultas de rango mensual > 2s de forma sostenida,
+- mantenimiento de índices > ventana operativa permitida.
+
+Sugerencia inicial de estrategia:
+
+1. Prototipo en staging con particiones por mes (12 meses recientes + histórico).
+2. Medir `EXPLAIN ANALYZE` en RPC mensual y snapshots diarios antes/después.
+3. Definir política de archivado y retención para particiones antiguas.

@@ -38,6 +38,9 @@ supabase db push
 
 # Desplegar la Edge Function asíncrona de reportes
 supabase functions deploy generate-monthly-report --no-verify-jwt=false
+
+# Desplegar la Edge Function de snapshots diarios (Fase 3)
+supabase functions deploy snapshot-daily-facts --no-verify-jwt=true
 ```
 
 ## 4) Validación rápida post-migración
@@ -76,6 +79,41 @@ ORDER BY indexname;
 ```bash
 supabase db remote psql -c "\d+ public.report_runs"
 ```
+
+### 4.5 Verificar tablas de escala analítica
+
+```bash
+supabase db remote psql -c "\d+ public.attendance_daily_facts"
+supabase db remote psql -c "\d+ public.attendance_rule_versions"
+```
+
+### 4.6 Smoke test de snapshots diarios
+
+```bash
+supabase db remote psql -c "
+SELECT public.refresh_attendance_daily_facts((CURRENT_DATE - INTERVAL '1 day')::date, NULL, 'manual_smoke');
+"
+```
+
+### 4.7 Recalculo selectivo por correcciones
+
+```bash
+supabase db remote psql -c "
+SELECT public.refresh_attendance_daily_facts_for_range(
+  CURRENT_DATE - INTERVAL '7 day',
+  CURRENT_DATE - INTERVAL '1 day',
+  NULL,
+  'attendance_correction'
+);
+"
+```
+
+### 4.8 Programar cron nocturno (Dashboard)
+
+Programar una tarea diaria (ej. 02:10 AM local) que invoque la función `snapshot-daily-facts`.
+
+- Ruta: **Supabase Dashboard → Edge Functions → Schedule**.
+- Cron sugerido (UTC): `10 7 * * *` (equivale aprox. 02:10 AM UTC-5).
 
 ## 5) Smoke test de la RPC
 

@@ -17,6 +17,12 @@ interface GenerateReportPayload {
   format?: 'csv';
 }
 
+interface RuleVersionRow {
+  id: string;
+  version: string;
+  config: Record<string, unknown>;
+}
+
 const encoder = new TextEncoder();
 
 async function sha256(text: string): Promise<string> {
@@ -106,9 +112,18 @@ Deno.serve(async (req) => {
       .eq('key', 'global_timezone')
       .maybeSingle();
 
+    const { data: activeRuleVersion } = await admin
+      .from('attendance_rule_versions')
+      .select('id, version, config')
+      .eq('is_active', true)
+      .maybeSingle<RuleVersionRow>();
+
+    const resolvedRuleVersion = activeRuleVersion?.version || 'v1.0.0';
+
     const rulesParams = {
       include_heads: includeHeads,
       global_timezone: tzConfig?.value ?? null,
+      rule_config: activeRuleVersion?.config ?? {},
     };
 
     const { data: runData, error: runInsertError } = await admin
@@ -120,7 +135,8 @@ Deno.serve(async (req) => {
         filters: { include_heads: includeHeads },
         period_start: from,
         period_end: to,
-        rules_version: 'v1',
+        rules_version: resolvedRuleVersion,
+        rule_version_id: activeRuleVersion?.id ?? null,
         rules_params: rulesParams,
         status: 'running',
         started_at: startedAt,
@@ -193,7 +209,7 @@ Deno.serve(async (req) => {
           include_heads: includeHeads,
           row_count: rpcData.length,
           artifact_path: artifactPath,
-          rules_version: 'v1',
+          rules_version: resolvedRuleVersion,
           duration_ms: Date.now() - new Date(startedAt).getTime(),
         },
       });
@@ -231,7 +247,7 @@ Deno.serve(async (req) => {
           to,
           department_id: departmentId,
           include_heads: includeHeads,
-          rules_version: 'v1',
+          rules_version: resolvedRuleVersion,
           error: message,
         },
       });
