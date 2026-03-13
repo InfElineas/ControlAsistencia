@@ -172,7 +172,7 @@ BEGIN
       WHEN dm.in_timestamp IS NULL OR se.checkin_end_time IS NULL THEN NULL
       ELSE GREATEST(
         0,
-        FLOOR(EXTRACT(EPOCH FROM (((dm.in_timestamp AT TIME ZONE COALESCE(NULLIF(se.timezone, ''), 'UTC'))::time - se.checkin_end_time)) / 60)
+        FLOOR(EXTRACT(EPOCH FROM (((dm.in_timestamp AT TIME ZONE COALESCE(NULLIF(se.timezone, ''), 'UTC'))::time - se.checkin_end_time)) / 60))
       )::INTEGER
     END AS lateness_minutes,
     CASE
