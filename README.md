@@ -110,6 +110,16 @@ Se generó una auditoría con hallazgos y plan de acción en:
 - `docs/usabilidad-calidad-reporte.md`
 - `docs/guia-remediacion-paso-a-paso.md`
 
+Guía de comandos para aplicar migraciones/cambios de base de datos:
+
+- `docs/comandos-aplicar-cambios-bd.md`
+
+Documentación operativa/técnica de reportería:
+
+- `docs/runbook-reporting-pipeline.md`
+- `docs/pipeline-reporting-tecnico.md`
+- `docs/pruebas-carga-reportes.md`
+
 ## Employee Mobile Mode (nuevo)
 
 Se añadió un modo móvil orientado a empleados con navegación inferior y auto-selección de interfaz.
