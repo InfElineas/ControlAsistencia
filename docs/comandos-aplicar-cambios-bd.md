@@ -115,6 +115,15 @@ Programar una tarea diaria (ej. 02:10 AM local) que invoque la función `snapsho
 - Ruta: **Supabase Dashboard → Edge Functions → Schedule**.
 - Cron sugerido (UTC): `10 7 * * *` (equivale aprox. 02:10 AM UTC-5).
 
+### 4.9 KPIs operativos (30 días)
+
+```bash
+supabase db remote psql -c "
+SELECT *
+FROM public.get_report_runs_operational_kpis(now() - interval '30 days');
+"
+```
+
 ## 5) Smoke test de la RPC
 
 > Ejecutar con un usuario que tenga permisos (`global_manager` o `superadmin` para scope global).

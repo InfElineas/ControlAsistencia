@@ -105,6 +105,8 @@ Deno.serve(async (req) => {
     }
 
     const startedAt = new Date().toISOString();
+    const startEpoch = Date.now();
+    let retriesUsed = 0;
 
     const { data: tzConfig } = await admin
       .from('app_config')
@@ -158,7 +160,10 @@ Deno.serve(async (req) => {
           _include_heads: includeHeads,
         });
 
-        if (error) throw error;
+        if (error) {
+          retriesUsed += 1;
+          throw error;
+        }
         return (data || []) as Record<string, unknown>[];
       });
 
@@ -175,7 +180,10 @@ Deno.serve(async (req) => {
             upsert: true,
           });
 
-        if (error) throw error;
+        if (error) {
+          retriesUsed += 1;
+          throw error;
+        }
       });
 
       const finishedAt = new Date().toISOString();
@@ -188,8 +196,9 @@ Deno.serve(async (req) => {
           checksum,
           artifact_bucket: 'monthly-reports',
           artifact_path: artifactPath,
+          duration_ms: Date.now() - startEpoch,
           finished_at: finishedAt,
-          retry_count: 2,
+          retry_count: retriesUsed,
           error: null,
         })
         .eq('id', runId);
@@ -231,8 +240,9 @@ Deno.serve(async (req) => {
         .update({
           status: 'failed',
           finished_at: new Date().toISOString(),
+          duration_ms: Date.now() - startEpoch,
           error: message,
-          retry_count: 3,
+          retry_count: retriesUsed,
         })
         .eq('id', runId);
 

@@ -27,12 +27,31 @@ interface ReportRunsCardProps {
   title?: string;
 }
 
+interface ReportRunKpis {
+  total_runs: number | null;
+  completed_runs: number | null;
+  failed_runs: number | null;
+  error_rate_pct: number | null;
+  availability_pct: number | null;
+  p95_duration_ms: number | null;
+  avg_duration_ms: number | null;
+  rows_processed: number | null;
+}
+
 export function ReportRunsCard({ scope, departmentId = null, title = 'Reportes generados' }: ReportRunsCardProps) {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ReportRunItem[]>([]);
+  const [kpis, setKpis] = useState<ReportRunKpis | null>(null);
 
   const fetchRuns = async () => {
     setLoading(true);
+
+    const { data: kpiData } = await supabase.rpc('get_report_runs_operational_kpis', {
+      _from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    if (Array.isArray(kpiData) && kpiData[0]) {
+      setKpis(kpiData[0] as ReportRunKpis);
+    }
 
     let query = supabase
       .from('report_runs' as never)
@@ -87,6 +106,27 @@ export function ReportRunsCard({ scope, departmentId = null, title = 'Reportes g
         </Button>
       </CardHeader>
       <CardContent>
+        {kpis && (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+            <div className="rounded-md border p-2">
+              <p className="text-[11px] text-muted-foreground">Error rate (30d)</p>
+              <p className="font-semibold">{kpis.error_rate_pct ?? 0}%</p>
+            </div>
+            <div className="rounded-md border p-2">
+              <p className="text-[11px] text-muted-foreground">Disponibilidad (30d)</p>
+              <p className="font-semibold">{kpis.availability_pct ?? 0}%</p>
+            </div>
+            <div className="rounded-md border p-2">
+              <p className="text-[11px] text-muted-foreground">p95 duración</p>
+              <p className="font-semibold">{kpis.p95_duration_ms ? `${Math.round(kpis.p95_duration_ms / 1000)}s` : '-'}</p>
+            </div>
+            <div className="rounded-md border p-2">
+              <p className="text-[11px] text-muted-foreground">Filas procesadas</p>
+              <p className="font-semibold">{kpis.rows_processed ?? 0}</p>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-4">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
