@@ -108,6 +108,20 @@ interface EmployeeDetails {
   };
 }
 
+interface AttendanceMonthlyRpcRow {
+  date: string;
+  employee_name: string;
+  employee_email: string;
+  department: string;
+  status: AttendanceReportRow['status'];
+  in_timestamp: string | null;
+  out_timestamp: string | null;
+  lateness_minutes: number | null;
+  absence_justification: AttendanceReportRow['absence_justification'];
+  inside_geofence: boolean | null;
+  distance_m: number | null;
+}
+
 export default function GlobalPanel() {
   const { departments } = useDepartments();
   const [employees, setEmployees] = useState<Employee[]>([]);
