@@ -41,10 +41,11 @@ import {
 } from 'lucide-react';
 import { format, startOfMonth, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { exportToXLSX, AttendanceReportRow, formatTime } from '@/lib/xlsx-export';
+import { formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { useDepartments } from '@/hooks/useDepartments';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
+import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 
 interface Employee {
   id: string;
@@ -286,87 +287,22 @@ export default function GlobalPanel() {
     setExporting(true);
 
     try {
-      const reportData: AttendanceReportRow[] = [];
-      const { data: absenceReviews } = await supabase
-        .from('attendance_absence_reviews')
-        .select('user_id, date, is_justified')
-        .gte('date', dateRange.from)
-        .lte('date', dateRange.to)
-        .in('user_id', employees.map((employee) => employee.user_id));
+      const { data, error } = await supabase.functions.invoke('generate-monthly-report', {
+        body: {
+          from: dateRange.from,
+          to: dateRange.to,
+          scope: 'global',
+          department_id: null,
+          include_heads: includeHeadsInGlobalReports,
+          format: 'csv',
+        },
+      });
 
-      const absenceMap = new Map(
-        (absenceReviews || []).map((review) => [
-          `${review.user_id}_${review.date}`,
-          review.is_justified ? 'JUSTIFICADA' : 'NO_JUSTIFICADA',
-        ])
-      );
+      if (error) throw error;
 
-      for (const emp of employees) {
-        const { data: marks } = await supabase
-          .from('attendance_marks')
-          .select('*')
-          .eq('user_id', emp.user_id)
-          .gte('timestamp', `${dateRange.from}T00:00:00`)
-          .lte('timestamp', `${dateRange.to}T23:59:59`)
-          .order('timestamp', { ascending: true });
-
-        // Group by date
-        const byDate: Record<string, typeof marks> = {};
-        marks?.forEach((m) => {
-          const date = m.timestamp.split('T')[0];
-          if (!byDate[date]) byDate[date] = [];
-          byDate[date].push(m);
-        });
-
-        // Generate rows for each date
-        const start = new Date(dateRange.from);
-        const end = new Date(dateRange.to);
-
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateStr = format(d, 'yyyy-MM-dd');
-          const dayMarks = byDate[dateStr] || [];
-          const inMark = dayMarks.find((m) => m.mark_type === 'IN');
-          const outMark = dayMarks.filter((m) => m.mark_type === 'OUT').pop();
-
-          reportData.push({
-            date: dateStr,
-            employee_name: emp.full_name,
-            employee_email: emp.email,
-            department: emp.department_name,
-            status: emp.department_paused
-              ? 'NO_LABORABLE'
-              : inMark
-                ? (calculateLateMinutes(
-                    inMark.timestamp,
-                    deparmentScheduleMap[emp.department_id]?.checkin_end_time ?? null,
-                    deparmentScheduleMap[emp.department_id]?.timezone ?? null
-                  ) > 0
-                    ? 'TARDE'
-                    : 'PRESENTE')
-                : 'AUSENTE',
-            in_time: inMark ? formatTime(inMark.timestamp) : null,
-            out_time: outMark ? formatTime(outMark.timestamp) : null,
-            lateness_minutes: inMark
-              ? calculateLateMinutes(
-                  inMark.timestamp,
-                  deparmentScheduleMap[emp.department_id]?.checkin_end_time ?? null,
-                  deparmentScheduleMap[emp.department_id]?.timezone ?? null
-                )
-              : null,
-            absence_justification:
-              !inMark && !emp.department_paused
-                ? ((absenceMap.get(`${emp.user_id}_${dateStr}`) as 'JUSTIFICADA' | 'NO_JUSTIFICADA' | undefined) || 'PENDIENTE')
-                : '-',
-            inside_geofence: inMark?.inside_geofence ?? null,
-            distance_m: inMark?.distance_to_center ?? null,
-          });
-        }
-      }
-
-      exportToXLSX(reportData, `asistencia_global_${dateRange.from}_${dateRange.to}`);
-      toast.success('Reporte global descargado correctamente');
+      toast.success(`Reporte generado. Run ID: ${data?.run_id ?? '-'}`);
     } catch (error) {
-      toast.error('Error al generar el reporte');
+      toast.error('Error al generar el reporte mensual asíncrono');
     }
 
     setExporting(false);
@@ -809,6 +745,8 @@ export default function GlobalPanel() {
             </div>
           </CardContent>
         </Card>
+
+        <ReportRunsCard scope="global" title="Ejecuciones de reportes globales" />
 
         <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
           <DialogContent>
