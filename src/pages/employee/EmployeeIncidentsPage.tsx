@@ -18,8 +18,12 @@ import {
   IncidentType,
   buildIncidentErrorMessage,
   formatIncidentStatus,
+  getIncidentStatusClasses,
+  getIncidentTypeLabel,
   isSchemaNotReadyError,
 } from '@/lib/incidents';
+import { AlertTriangle, Clock3 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Incident {
   id: string;
@@ -149,7 +153,9 @@ export function EmployeeIncidentsPage() {
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-base">Mis incidencias</CardTitle>
             <div className="flex items-center gap-2">
-              <Badge variant="secondary">Pendientes: {pendingCount}</Badge>
+              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                Pendientes: {pendingCount}
+              </Badge>
               <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
                 Recargar
               </Button>
@@ -176,16 +182,28 @@ export function EmployeeIncidentsPage() {
           )}
 
           {filteredData.map((item) => (
-            <div key={item.id} className="rounded-xl border p-3 text-sm">
+            <div key={item.id} className={cn('rounded-xl border p-3 text-sm', getIncidentStatusClasses(item.status).cardClassName)}>
               <div className="flex items-center justify-between gap-2">
-                <p className="font-semibold capitalize">{item.incident_type}</p>
-                <Badge variant={item.status === 'approved' ? 'default' : item.status === 'rejected' ? 'destructive' : 'secondary'}>
+                <p className="font-semibold">{getIncidentTypeLabel(item.incident_type)}</p>
+                <Badge variant="outline" className={cn('font-medium', getIncidentStatusClasses(item.status).badgeClassName)}>
                   {formatIncidentStatus(item.status)}
                 </Badge>
               </div>
-              <p className="text-muted-foreground">{format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm')}</p>
-              {item.reason && <p className="mt-1">Motivo: {item.reason}</p>}
-              {item.manager_notes && <p className="mt-1 text-muted-foreground">Respuesta gestor: {item.manager_notes}</p>}
+              <p className="text-muted-foreground">
+                <Clock3 className="mr-1 inline h-4 w-4" />
+                {format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm')}
+              </p>
+              {item.reason && (
+                <p className="mt-1 rounded-md border bg-background/80 p-2">
+                  <AlertTriangle className="mr-1 inline h-4 w-4 text-amber-600" />
+                  <span className="font-medium">Motivo:</span> {item.reason}
+                </p>
+              )}
+              {item.manager_notes && (
+                <p className="mt-1 rounded-md border border-primary/20 bg-primary/5 p-2 text-muted-foreground">
+                  <span className="font-medium text-foreground">Respuesta gestor:</span> {item.manager_notes}
+                </p>
+              )}
               {item.reviewed_at && <p className="mt-1 text-xs text-muted-foreground">Revisada: {format(new Date(item.reviewed_at), 'dd/MM/yyyy HH:mm')}</p>}
             </div>
           ))}
