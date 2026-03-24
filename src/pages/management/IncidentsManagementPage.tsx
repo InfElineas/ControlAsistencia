@@ -224,8 +224,23 @@ export function IncidentsManagementPage() {
   const compactButtonClassName = 'h-9 rounded-lg px-3 text-xs font-medium sm:text-sm';
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="mx-auto max-w-4xl space-y-4 pb-4">
+      <Card className="overflow-hidden rounded-3xl border-0 bg-gradient-to-r from-[#133A7C] via-[#1E4D92] to-[#2A9BB3] text-white shadow-sm">
+        <CardContent className="space-y-3 p-5">
+          <p className="text-sm/5 text-white/80">Gestión de incidencias</p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-2xl font-semibold">Bandeja de revisión</p>
+              <p className="text-sm text-white/80">Aprueba o rechaza incidencias de forma rápida desde móvil.</p>
+            </div>
+            <Badge className="rounded-full border border-white/20 bg-white/15 px-3 text-white">
+              Pendientes: {pendingCount}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-3xl border shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Registrar incidencia a un trabajador</CardTitle>
         </CardHeader>
@@ -276,7 +291,7 @@ export function IncidentsManagementPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-3xl border shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-base">Bandeja de incidencias</CardTitle>
@@ -288,22 +303,22 @@ export function IncidentsManagementPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-lg border bg-muted/30 p-3">
+            <div className="rounded-2xl border bg-muted/30 p-3">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Rol revisor</p>
               <p className="font-semibold text-foreground">{role?.replace('_', ' ')}</p>
             </div>
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
               <p className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">Pendientes</p>
               <p className="font-semibold text-foreground">{pendingCount}</p>
             </div>
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 sm:col-span-2 lg:col-span-1">
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 sm:col-span-2 lg:col-span-1">
               <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Total visibles</p>
               <p className="font-semibold text-foreground">{filteredData.length}</p>
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | IncidentStatus)}>
-              <SelectTrigger>
+              <SelectTrigger className="rounded-full">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
@@ -313,7 +328,7 @@ export function IncidentsManagementPage() {
                 <SelectItem value="rejected">Rechazadas</SelectItem>
               </SelectContent>
             </Select>
-            <Input placeholder="Buscar empleado/correo/depto/tipo" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="rounded-full" placeholder="Buscar empleado/correo/depto/tipo" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </CardContent>
       </Card>
@@ -322,13 +337,13 @@ export function IncidentsManagementPage() {
       {isError && <p className="text-sm text-destructive">{buildIncidentErrorMessage(error)}</p>}
 
       {!isLoading && !isError && filteredData.length === 0 && (
-        <Card>
+        <Card className="rounded-3xl border shadow-sm">
           <CardContent className="pt-6 text-sm text-muted-foreground">No hay incidencias para el filtro actual.</CardContent>
         </Card>
       )}
 
       {filteredData.length > 0 && (
-        <Card>
+        <Card className="rounded-3xl border shadow-sm">
           <CardContent className="p-0">
             <ul className="divide-y">
               {filteredData.map((item) => (

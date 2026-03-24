@@ -105,7 +105,22 @@ export function EmployeeIncidentsPage() {
   const compactButtonClassName = 'h-9 rounded-lg px-3 text-xs font-medium sm:text-sm';
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-3xl space-y-4 pb-4">
+      <Card className="overflow-hidden rounded-3xl border-0 bg-gradient-to-r from-[#133A7C] via-[#1E4D92] to-[#2A9BB3] text-white shadow-sm">
+        <CardContent className="space-y-3 p-5">
+          <p className="text-sm/5 text-white/80">Incidencias</p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-2xl font-semibold">Mis solicitudes</p>
+              <p className="text-sm text-white/80">Seguimiento rápido de estados y respuesta de gestión.</p>
+            </div>
+            <Badge className="rounded-full border border-white/20 bg-white/15 px-3 text-white">
+              Pendientes: {pendingCount}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
       {schemaNotReady && (
         <Card className="border-warning/40 bg-warning/10">
           <CardContent className="pt-6 text-sm">
@@ -117,7 +132,7 @@ export function EmployeeIncidentsPage() {
         </Card>
       )}
 
-      <Card>
+      <Card className="rounded-3xl border shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Nueva incidencia</CardTitle>
         </CardHeader>
@@ -150,7 +165,7 @@ export function EmployeeIncidentsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-3xl border shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base">Mis incidencias</CardTitle>
@@ -167,7 +182,7 @@ export function EmployeeIncidentsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | IncidentStatus)}>
-            <SelectTrigger>
+            <SelectTrigger className="rounded-full">
               <SelectValue placeholder="Filtrar estado" />
             </SelectTrigger>
             <SelectContent>
@@ -185,7 +200,7 @@ export function EmployeeIncidentsPage() {
           )}
 
           {filteredData.map((item) => (
-            <div key={item.id} className={cn('rounded-xl border p-3 text-sm', getIncidentStatusClasses(item.status).cardClassName)}>
+            <div key={item.id} className={cn('rounded-2xl border p-3 text-sm shadow-sm', getIncidentStatusClasses(item.status).cardClassName)}>
               <div className="flex items-center justify-between gap-2">
                 <p className="font-semibold">{getIncidentTypeLabel(item.incident_type)}</p>
                 <Badge variant="outline" className={cn('font-medium', getIncidentStatusClasses(item.status).badgeClassName)}>
