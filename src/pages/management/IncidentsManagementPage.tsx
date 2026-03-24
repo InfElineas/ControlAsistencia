@@ -11,10 +11,21 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { IncidentStatus, INCIDENT_TYPES, IncidentType, buildIncidentErrorMessage, formatIncidentStatus } from '@/lib/incidents';
+import {
+  IncidentStatus,
+  INCIDENT_TYPES,
+  IncidentType,
+  buildIncidentErrorMessage,
+  formatIncidentStatus,
+  getIncidentStatusClasses,
+  getIncidentTypeLabel,
+} from '@/lib/incidents';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
+import { AlertTriangle, Check, Clock3, MoreHorizontal, RotateCw, UserRound, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface IncidentRow {
   id: string;
@@ -33,12 +44,6 @@ interface ProfileRow {
   email: string;
   department_id: string;
   departments: { name: string } | null;
-}
-
-function statusVariant(status: IncidentStatus) {
-  if (status === 'approved') return 'default';
-  if (status === 'rejected') return 'destructive';
-  return 'secondary';
 }
 
 export function IncidentsManagementPage() {
@@ -216,9 +221,26 @@ export function IncidentsManagementPage() {
     createIncidentMutation.mutate();
   };
 
+  const compactButtonClassName = 'h-9 rounded-lg px-3 text-xs font-medium sm:text-sm';
+
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="mx-auto max-w-4xl space-y-4 pb-4">
+      <Card className="overflow-hidden rounded-3xl border-0 bg-gradient-to-r from-[#133A7C] via-[#1E4D92] to-[#2A9BB3] text-white shadow-sm">
+        <CardContent className="space-y-3 p-5">
+          <p className="text-sm/5 text-white/80">Gestión de incidencias</p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-2xl font-semibold">Bandeja de revisión</p>
+              <p className="text-sm text-white/80">Aprueba o rechaza incidencias de forma rápida desde móvil.</p>
+            </div>
+            <Badge className="rounded-full border border-white/20 bg-white/15 px-3 text-white">
+              Pendientes: {pendingCount}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-3xl border shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Registrar incidencia a un trabajador</CardTitle>
         </CardHeader>
@@ -259,29 +281,44 @@ export function IncidentsManagementPage() {
             />
             <p className="text-xs text-muted-foreground text-right">{createReason.length}/300</p>
 
-            <Button className="w-full" disabled={createIncidentMutation.isPending || manageableWorkers.length === 0}>
+            <Button
+              className={cn('w-full sm:ml-auto sm:w-auto', compactButtonClassName)}
+              disabled={createIncidentMutation.isPending || manageableWorkers.length === 0}
+            >
               {createIncidentMutation.isPending ? 'Guardando...' : 'Registrar incidencia'}
             </Button>
           </form>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-3xl border shadow-sm">
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-base">Bandeja de incidencias</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => refetch()}>
+            <Button size="sm" variant="outline" className={compactButtonClassName} onClick={() => refetch()}>
+              <RotateCw className="mr-1 h-3.5 w-3.5" />
               Recargar
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>
-            Rol revisor: <span className="font-medium text-foreground">{role?.replace('_', ' ')}</span> · Pendientes: <span className="font-semibold text-foreground">{pendingCount}</span>
-          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-2xl border bg-muted/30 p-3">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Rol revisor</p>
+              <p className="font-semibold text-foreground">{role?.replace('_', ' ')}</p>
+            </div>
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3">
+              <p className="text-xs uppercase tracking-wide text-amber-700 dark:text-amber-300">Pendientes</p>
+              <p className="font-semibold text-foreground">{pendingCount}</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 sm:col-span-2 lg:col-span-1">
+              <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Total visibles</p>
+              <p className="font-semibold text-foreground">{filteredData.length}</p>
+            </div>
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | IncidentStatus)}>
-              <SelectTrigger>
+              <SelectTrigger className="rounded-full">
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
@@ -291,7 +328,7 @@ export function IncidentsManagementPage() {
                 <SelectItem value="rejected">Rechazadas</SelectItem>
               </SelectContent>
             </Select>
-            <Input placeholder="Buscar empleado/correo/depto/tipo" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="rounded-full" placeholder="Buscar empleado/correo/depto/tipo" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </CardContent>
       </Card>
@@ -300,64 +337,92 @@ export function IncidentsManagementPage() {
       {isError && <p className="text-sm text-destructive">{buildIncidentErrorMessage(error)}</p>}
 
       {!isLoading && !isError && filteredData.length === 0 && (
-        <Card>
+        <Card className="rounded-3xl border shadow-sm">
           <CardContent className="pt-6 text-sm text-muted-foreground">No hay incidencias para el filtro actual.</CardContent>
         </Card>
       )}
 
-      {filteredData.map((item) => (
-        <Card key={item.id}>
-          <CardContent className="space-y-3 pt-6">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="font-semibold capitalize">{item.incident_type}</p>
-                <p className="text-sm text-muted-foreground">
-                  {item.employee?.full_name || 'Empleado'} · {item.employee?.email || 'sin email'} · {item.employee?.departments?.name || 'Sin departamento'}
-                </p>
-              </div>
-              <Badge variant={statusVariant(item.status)}>{formatIncidentStatus(item.status)}</Badge>
-            </div>
+      {filteredData.length > 0 && (
+        <Card className="rounded-3xl border shadow-sm">
+          <CardContent className="p-0">
+            <ul className="divide-y">
+              {filteredData.map((item) => (
+                <li key={item.id} className="space-y-3 p-4 sm:p-5">
+                  <div className={cn('space-y-3 rounded-lg border p-4', getIncidentStatusClasses(item.status).cardClassName)}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold">{getIncidentTypeLabel(item.incident_type as IncidentType)}</p>
+                          <span className={cn('h-2.5 w-2.5 rounded-full', getIncidentStatusClasses(item.status).dotClassName)} />
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          <UserRound className="mr-1 inline h-4 w-4" />
+                          {item.employee?.full_name || 'Empleado'} · {item.employee?.email || 'sin email'} · {item.employee?.departments?.name || 'Sin departamento'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          <Clock3 className="mr-1 inline h-4 w-4" />
+                          Solicitud: {format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={cn('font-medium', getIncidentStatusClasses(item.status).badgeClassName)}>
+                          {formatIncidentStatus(item.status)}
+                        </Badge>
+                        {item.status === 'pending' && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-md"
+                              disabled={reviewMutation.isPending}
+                              aria-label="Acciones de incidencia"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => reviewMutation.mutate({ id: item.id, status: 'approved', userId: item.user_id })}>
+                                <Check className="mr-2 h-4 w-4 text-emerald-600" />
+                                Aceptar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => reviewMutation.mutate({ id: item.id, status: 'rejected', userId: item.user_id })}>
+                                <X className="mr-2 h-4 w-4 text-destructive" />
+                                Rechazar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </div>
 
-            <p className="text-sm text-muted-foreground">
-              Solicitud: {format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm', { locale: es })}
-            </p>
+                    {item.reason && (
+                      <div className="rounded-md border bg-background/70 p-2 text-sm">
+                        <AlertTriangle className="mr-1 inline h-4 w-4 text-amber-600" />
+                        <span className="font-medium">Motivo:</span> {item.reason}
+                      </div>
+                    )}
 
-            {item.reason && <p className="text-sm">Motivo: {item.reason}</p>}
+                    <Textarea
+                      placeholder="Notas de revisión (opcional)"
+                      value={notesById[item.id] ?? item.manager_notes ?? ''}
+                      onChange={(event) => setNotesById((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                      disabled={item.status !== 'pending'}
+                      maxLength={300}
+                    />
 
-            <Textarea
-              placeholder="Notas de revisión (opcional)"
-              value={notesById[item.id] ?? item.manager_notes ?? ''}
-              onChange={(event) => setNotesById((prev) => ({ ...prev, [item.id]: event.target.value }))}
-              disabled={item.status !== 'pending'}
-              maxLength={300}
-            />
-
-            {item.status === 'pending' ? (
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  onClick={() => reviewMutation.mutate({ id: item.id, status: 'approved', userId: item.user_id })}
-                  disabled={reviewMutation.isPending}
-                >
-                  Aprobar
-                </Button>
-                <Button
-                  className="flex-1"
-                  variant="destructive"
-                  onClick={() => reviewMutation.mutate({ id: item.id, status: 'rejected', userId: item.user_id })}
-                  disabled={reviewMutation.isPending}
-                >
-                  Rechazar
-                </Button>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Revisada {item.reviewed_at ? format(new Date(item.reviewed_at), 'dd/MM/yyyy HH:mm', { locale: es }) : ''}
-              </p>
-            )}
+                    {item.status !== 'pending' && (
+                      <p className="text-xs text-muted-foreground">
+                        Revisada {item.reviewed_at ? format(new Date(item.reviewed_at), 'dd/MM/yyyy HH:mm', { locale: es }) : ''}
+                      </p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
-      ))}
+      )}
     </div>
   );
 }
