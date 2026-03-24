@@ -22,7 +22,7 @@ import {
   getIncidentTypeLabel,
   isSchemaNotReadyError,
 } from '@/lib/incidents';
-import { AlertTriangle, Clock3 } from 'lucide-react';
+import { AlertTriangle, Clock3, RotateCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Incident {
@@ -102,6 +102,8 @@ export function EmployeeIncidentsPage() {
     mutation.mutate();
   };
 
+  const compactButtonClassName = 'h-9 rounded-lg px-3 text-xs font-medium sm:text-sm';
+
   return (
     <div className="space-y-4">
       {schemaNotReady && (
@@ -141,7 +143,7 @@ export function EmployeeIncidentsPage() {
               maxLength={300}
             />
             <p className="text-xs text-muted-foreground text-right">{reason.length}/300</p>
-            <Button className="w-full" disabled={mutation.isPending || schemaNotReady}>
+            <Button className={cn('w-full sm:ml-auto sm:w-auto', compactButtonClassName)} disabled={mutation.isPending || schemaNotReady}>
               {mutation.isPending ? 'Guardando...' : 'Nueva incidencia'}
             </Button>
           </form>
@@ -150,13 +152,14 @@ export function EmployeeIncidentsPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base">Mis incidencias</CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
               <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
                 Pendientes: {pendingCount}
               </Badge>
-              <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
+              <Button variant="outline" size="sm" className={compactButtonClassName} onClick={() => refetch()} disabled={isLoading}>
+                <RotateCw className="mr-1 h-3.5 w-3.5" />
                 Recargar
               </Button>
             </div>

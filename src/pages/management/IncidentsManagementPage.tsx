@@ -24,7 +24,7 @@ import {
 } from '@/lib/incidents';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
-import { AlertTriangle, Check, Clock3, MoreHorizontal, UserRound, X } from 'lucide-react';
+import { AlertTriangle, Check, Clock3, MoreHorizontal, RotateCw, UserRound, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface IncidentRow {
@@ -221,6 +221,8 @@ export function IncidentsManagementPage() {
     createIncidentMutation.mutate();
   };
 
+  const compactButtonClassName = 'h-9 rounded-lg px-3 text-xs font-medium sm:text-sm';
+
   return (
     <div className="space-y-4">
       <Card>
@@ -264,7 +266,10 @@ export function IncidentsManagementPage() {
             />
             <p className="text-xs text-muted-foreground text-right">{createReason.length}/300</p>
 
-            <Button className="w-full" disabled={createIncidentMutation.isPending || manageableWorkers.length === 0}>
+            <Button
+              className={cn('w-full sm:ml-auto sm:w-auto', compactButtonClassName)}
+              disabled={createIncidentMutation.isPending || manageableWorkers.length === 0}
+            >
               {createIncidentMutation.isPending ? 'Guardando...' : 'Registrar incidencia'}
             </Button>
           </form>
@@ -275,7 +280,8 @@ export function IncidentsManagementPage() {
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
             <CardTitle className="text-base">Bandeja de incidencias</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => refetch()}>
+            <Button size="sm" variant="outline" className={compactButtonClassName} onClick={() => refetch()}>
+              <RotateCw className="mr-1 h-3.5 w-3.5" />
               Recargar
             </Button>
           </div>
@@ -350,9 +356,15 @@ export function IncidentsManagementPage() {
                         {item.status === 'pending' && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={reviewMutation.isPending} aria-label="Acciones de incidencia">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 rounded-md"
+                              disabled={reviewMutation.isPending}
+                              aria-label="Acciones de incidencia"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => reviewMutation.mutate({ id: item.id, status: 'approved', userId: item.user_id })}>
