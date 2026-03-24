@@ -11,10 +11,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { IncidentStatus, INCIDENT_TYPES, IncidentType, buildIncidentErrorMessage, formatIncidentStatus } from '@/lib/incidents';
 import { useNotifications } from '@/contexts/NotificationsContext';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
+import { Check, MoreHorizontal, X } from 'lucide-react';
 
 interface IncidentRow {
   id: string;
@@ -305,59 +307,67 @@ export function IncidentsManagementPage() {
         </Card>
       )}
 
-      {filteredData.map((item) => (
-        <Card key={item.id}>
-          <CardContent className="space-y-3 pt-6">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="font-semibold capitalize">{item.incident_type}</p>
-                <p className="text-sm text-muted-foreground">
-                  {item.employee?.full_name || 'Empleado'} · {item.employee?.email || 'sin email'} · {item.employee?.departments?.name || 'Sin departamento'}
-                </p>
-              </div>
-              <Badge variant={statusVariant(item.status)}>{formatIncidentStatus(item.status)}</Badge>
-            </div>
+      {filteredData.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <ul className="divide-y">
+              {filteredData.map((item) => (
+                <li key={item.id} className="space-y-3 p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="font-semibold capitalize">{item.incident_type}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {item.employee?.full_name || 'Empleado'} · {item.employee?.email || 'sin email'} · {item.employee?.departments?.name || 'Sin departamento'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Solicitud: {format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={statusVariant(item.status)}>{formatIncidentStatus(item.status)}</Badge>
+                      {item.status === 'pending' && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={reviewMutation.isPending} aria-label="Acciones de incidencia">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => reviewMutation.mutate({ id: item.id, status: 'approved', userId: item.user_id })}>
+                              <Check className="mr-2 h-4 w-4 text-emerald-600" />
+                              Aceptar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => reviewMutation.mutate({ id: item.id, status: 'rejected', userId: item.user_id })}>
+                              <X className="mr-2 h-4 w-4 text-destructive" />
+                              Rechazar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                  </div>
 
-            <p className="text-sm text-muted-foreground">
-              Solicitud: {format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm', { locale: es })}
-            </p>
+                  {item.reason && <p className="text-sm">Motivo: {item.reason}</p>}
 
-            {item.reason && <p className="text-sm">Motivo: {item.reason}</p>}
+                  <Textarea
+                    placeholder="Notas de revisión (opcional)"
+                    value={notesById[item.id] ?? item.manager_notes ?? ''}
+                    onChange={(event) => setNotesById((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                    disabled={item.status !== 'pending'}
+                    maxLength={300}
+                  />
 
-            <Textarea
-              placeholder="Notas de revisión (opcional)"
-              value={notesById[item.id] ?? item.manager_notes ?? ''}
-              onChange={(event) => setNotesById((prev) => ({ ...prev, [item.id]: event.target.value }))}
-              disabled={item.status !== 'pending'}
-              maxLength={300}
-            />
-
-            {item.status === 'pending' ? (
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  onClick={() => reviewMutation.mutate({ id: item.id, status: 'approved', userId: item.user_id })}
-                  disabled={reviewMutation.isPending}
-                >
-                  Aprobar
-                </Button>
-                <Button
-                  className="flex-1"
-                  variant="destructive"
-                  onClick={() => reviewMutation.mutate({ id: item.id, status: 'rejected', userId: item.user_id })}
-                  disabled={reviewMutation.isPending}
-                >
-                  Rechazar
-                </Button>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Revisada {item.reviewed_at ? format(new Date(item.reviewed_at), 'dd/MM/yyyy HH:mm', { locale: es }) : ''}
-              </p>
-            )}
+                  {item.status !== 'pending' && (
+                    <p className="text-xs text-muted-foreground">
+                      Revisada {item.reviewed_at ? format(new Date(item.reviewed_at), 'dd/MM/yyyy HH:mm', { locale: es }) : ''}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
-      ))}
+      )}
     </div>
   );
 }
