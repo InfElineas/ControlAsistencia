@@ -135,12 +135,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   );
 
   const mobileVisibleItems = filteredNavItems.slice(0, 4);
-  const mobileOverflowItems = filteredNavItems.slice(4);
+  const mobileRemainderItems = filteredNavItems.slice(4);
   const mobileQuickAction =
-    filteredNavItems.find((item) => item.href === '/configuration') ||
-    filteredNavItems.find((item) => item.href === '/gps-diagnostics') ||
-    filteredNavItems.find((item) => item.href === '/profile') ||
+    mobileRemainderItems.find((item) => item.href === '/configuration') ||
+    mobileRemainderItems.find((item) => item.href === '/gps-diagnostics') ||
+    mobileRemainderItems.find((item) => item.href === '/profile') ||
     filteredNavItems[0];
+  const mobileOverflowItems = mobileRemainderItems.filter((item) => item.href !== mobileQuickAction?.href);
 
   const toggleGroup = (groupKey: string) => {
     setOpenGroups((current) => ({ ...current, [groupKey]: !current[groupKey] }));
@@ -319,7 +320,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  'flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors',
+                  'flex min-h-14 items-center justify-center rounded-xl text-[11px] font-medium transition-colors',
                   isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
                 )}
               >
@@ -331,41 +332,41 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     </span>
                   )}
                 </div>
-                <span className="leading-none text-center">{item.label}</span>
+                <span className="sr-only">{item.label}</span>
               </Link>
             );
           })}
           <Link
             to={mobileQuickAction?.href ?? '/'}
             className={cn(
-              'flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors',
+              'flex min-h-14 items-center justify-center rounded-xl text-[11px] font-medium transition-colors',
               location.pathname === mobileQuickAction?.href ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
             )}
           >
             {mobileQuickAction ? <mobileQuickAction.icon className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
-            <span className="leading-none text-center">{mobileQuickAction?.label ?? 'Acceso'}</span>
+            <span className="sr-only">{mobileQuickAction?.label ?? 'Acceso'}</span>
           </Link>
           {mobileOverflowItems.length > 0 && (
             <button
               type="button"
               onClick={() => setMobileMoreOpen((current) => !current)}
               className={cn(
-                'flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors',
+                'flex min-h-14 items-center justify-center rounded-xl text-[11px] font-medium transition-colors',
                 mobileMoreOpen ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
               )}
             >
               <span className="text-base leading-none">{mobileMoreOpen ? '✕' : '☰'}</span>
-              <span className="leading-none text-center">Más</span>
+              <span className="sr-only">Más</span>
             </button>
           )}
           {mobileOverflowItems.length === 0 && (
             <button
               type="button"
               disabled
-              className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium text-muted-foreground/60"
+              className="flex min-h-14 items-center justify-center rounded-xl text-[11px] font-medium text-muted-foreground/60"
             >
               <span className="text-base leading-none">☰</span>
-              <span className="leading-none text-center">Más</span>
+              <span className="sr-only">Más</span>
             </button>
           )}
         </div>
