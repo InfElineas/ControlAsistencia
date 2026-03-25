@@ -132,6 +132,11 @@ export function EmployeeMarkPage() {
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="secondary" size="sm"><Link to="/incidents">Crear incidencia</Link></Button>
+        {!geoError && geofence && !geofence.isInside && (
+          <Button variant="secondary" size="sm" onClick={getCurrentPosition} disabled={geoLoading}>
+            {geoLoading ? 'Recalculando...' : 'Recalcular'}
+          </Button>
+        )}
         <Button asChild variant="secondary" size="sm"><Link to="/rest-schedule">Ver horario</Link></Button>
         <Button asChild variant="secondary" size="sm"><Link to="/history">Ver mis marcajes</Link></Button>
       </div>

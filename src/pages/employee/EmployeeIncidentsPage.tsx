@@ -18,8 +18,12 @@ import {
   IncidentType,
   buildIncidentErrorMessage,
   formatIncidentStatus,
+  getIncidentStatusClasses,
+  getIncidentTypeLabel,
   isSchemaNotReadyError,
 } from '@/lib/incidents';
+import { AlertTriangle, Clock3, RotateCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Incident {
   id: string;
@@ -98,8 +102,25 @@ export function EmployeeIncidentsPage() {
     mutation.mutate();
   };
 
+  const compactButtonClassName = 'h-9 rounded-lg px-3 text-xs font-medium sm:text-sm';
+
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-3xl space-y-4 pb-4">
+      <Card className="overflow-hidden rounded-3xl border-0 bg-gradient-to-r from-[#133A7C] via-[#1E4D92] to-[#2A9BB3] text-white shadow-sm">
+        <CardContent className="space-y-3 p-5">
+          <p className="text-sm/5 text-white/80">Incidencias</p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-2xl font-semibold">Mis solicitudes</p>
+              <p className="text-sm text-white/80">Seguimiento rápido de estados y respuesta de gestión.</p>
+            </div>
+            <Badge className="rounded-full border border-white/20 bg-white/15 px-3 text-white">
+              Pendientes: {pendingCount}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
       {schemaNotReady && (
         <Card className="border-warning/40 bg-warning/10">
           <CardContent className="pt-6 text-sm">
@@ -111,7 +132,7 @@ export function EmployeeIncidentsPage() {
         </Card>
       )}
 
-      <Card>
+      <Card className="rounded-3xl border shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Nueva incidencia</CardTitle>
         </CardHeader>
@@ -137,20 +158,23 @@ export function EmployeeIncidentsPage() {
               maxLength={300}
             />
             <p className="text-xs text-muted-foreground text-right">{reason.length}/300</p>
-            <Button className="w-full" disabled={mutation.isPending || schemaNotReady}>
+            <Button className={cn('w-full sm:ml-auto sm:w-auto', compactButtonClassName)} disabled={mutation.isPending || schemaNotReady}>
               {mutation.isPending ? 'Guardando...' : 'Nueva incidencia'}
             </Button>
           </form>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-3xl border shadow-sm">
         <CardHeader>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base">Mis incidencias</CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">Pendientes: {pendingCount}</Badge>
-              <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading}>
+            <div className="ml-auto flex items-center gap-2">
+              <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                Pendientes: {pendingCount}
+              </Badge>
+              <Button variant="outline" size="sm" className={compactButtonClassName} onClick={() => refetch()} disabled={isLoading}>
+                <RotateCw className="mr-1 h-3.5 w-3.5" />
                 Recargar
               </Button>
             </div>
@@ -158,7 +182,7 @@ export function EmployeeIncidentsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | IncidentStatus)}>
-            <SelectTrigger>
+            <SelectTrigger className="rounded-full">
               <SelectValue placeholder="Filtrar estado" />
             </SelectTrigger>
             <SelectContent>
@@ -176,16 +200,28 @@ export function EmployeeIncidentsPage() {
           )}
 
           {filteredData.map((item) => (
-            <div key={item.id} className="rounded-xl border p-3 text-sm">
+            <div key={item.id} className={cn('rounded-2xl border p-3 text-sm shadow-sm', getIncidentStatusClasses(item.status).cardClassName)}>
               <div className="flex items-center justify-between gap-2">
-                <p className="font-semibold capitalize">{item.incident_type}</p>
-                <Badge variant={item.status === 'approved' ? 'default' : item.status === 'rejected' ? 'destructive' : 'secondary'}>
+                <p className="font-semibold">{getIncidentTypeLabel(item.incident_type)}</p>
+                <Badge variant="outline" className={cn('font-medium', getIncidentStatusClasses(item.status).badgeClassName)}>
                   {formatIncidentStatus(item.status)}
                 </Badge>
               </div>
-              <p className="text-muted-foreground">{format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm')}</p>
-              {item.reason && <p className="mt-1">Motivo: {item.reason}</p>}
-              {item.manager_notes && <p className="mt-1 text-muted-foreground">Respuesta gestor: {item.manager_notes}</p>}
+              <p className="text-muted-foreground">
+                <Clock3 className="mr-1 inline h-4 w-4" />
+                {format(new Date(item.requested_at), 'dd/MM/yyyy HH:mm')}
+              </p>
+              {item.reason && (
+                <p className="mt-1 rounded-md border bg-background/80 p-2">
+                  <AlertTriangle className="mr-1 inline h-4 w-4 text-amber-600" />
+                  <span className="font-medium">Motivo:</span> {item.reason}
+                </p>
+              )}
+              {item.manager_notes && (
+                <p className="mt-1 rounded-md border border-primary/20 bg-primary/5 p-2 text-muted-foreground">
+                  <span className="font-medium text-foreground">Respuesta gestor:</span> {item.manager_notes}
+                </p>
+              )}
               {item.reviewed_at && <p className="mt-1 text-xs text-muted-foreground">Revisada: {format(new Date(item.reviewed_at), 'dd/MM/yyyy HH:mm')}</p>}
             </div>
           ))}
