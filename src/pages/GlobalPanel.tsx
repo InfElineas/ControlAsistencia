@@ -46,6 +46,7 @@ import { toast } from 'sonner';
 import { useDepartments } from '@/hooks/useDepartments';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
 import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
+import { formatLastConnection } from '@/lib/last-connection';
 
 interface Employee {
   id: string;
@@ -57,6 +58,7 @@ interface Employee {
   department_id: string;
   department_name: string;
   department_paused: boolean;
+  last_connection_at: string | null;
 }
 
 interface ProfileWithDepartment {
@@ -65,6 +67,7 @@ interface ProfileWithDepartment {
   full_name: string;
   email: string;
   phone: string | null;
+  last_connection_at: string | null;
   department_id: string;
   departments: { name: string; is_paused: boolean } | null;
 }
@@ -79,6 +82,7 @@ interface AttendanceSummary {
   employeeName: string;
   email: string;
   phone: string | null;
+  last_connection_at: string | null;
   role: string;
   department: string;
   todayStatus: 'PRESENTE' | 'TARDE' | 'AUSENTE' | 'DESCANSO' | 'NO_LABORABLE' | null;
@@ -170,6 +174,7 @@ export default function GlobalPanel() {
         full_name,
         email,
         phone,
+        last_connection_at,
         department_id,
         departments(name, is_paused)
       `);
@@ -213,6 +218,7 @@ export default function GlobalPanel() {
           full_name: p.full_name,
           email: p.email,
           phone: p.phone,
+          last_connection_at: p.last_connection_at,
           role: roleMap.get(p.user_id) || 'employee',
           department_id: p.department_id,
           department_name: p.departments?.name || 'Sin departamento',
@@ -279,6 +285,7 @@ export default function GlobalPanel() {
           employeeName: emp.full_name,
           email: emp.email,
           phone: emp.phone,
+          last_connection_at: emp.last_connection_at,
           role: emp.role,
           department: emp.department_name,
           todayStatus: emp.department_paused ? 'NO_LABORABLE' : inMark ? (lateMinutes > 0 ? 'TARDE' : 'PRESENTE') : 'AUSENTE',
@@ -656,6 +663,7 @@ export default function GlobalPanel() {
                           <p className="font-medium">{row.employeeName}</p>
                           <p className="text-xs text-muted-foreground">{row.email}</p>
                           <p className="text-xs text-muted-foreground">Tel: {row.phone || 'No registrado'} · Rol: {row.role}</p>
+                          <p className="text-xs text-muted-foreground">Última conexión: {formatLastConnection(row.last_connection_at)}</p>
                         </div>
                       </TableCell>
                       <TableCell>{row.department}</TableCell>
