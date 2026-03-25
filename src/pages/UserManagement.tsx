@@ -47,6 +47,7 @@ import { Loader2, UserPlus, Shield, Users, Edit, Filter, Trash2 } from 'lucide-r
 import { z } from 'zod';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getHighestRole } from '@/lib/roles';
+import { formatLastConnection } from '@/lib/last-connection';
 
 interface FunctionErrorPayload {
   error?: string;
@@ -88,6 +89,7 @@ interface UserWithRole {
   role: AppRole;
   managed_department_ids: string[];
   managed_department_names: string[];
+  last_connection_at: string | null;
 }
 
 const USERS_PAGE_SIZE = 10;
@@ -199,6 +201,7 @@ export default function UserManagement() {
           role: roleForUser as AppRole,
           managed_department_ids: managedDepartmentIds,
           managed_department_names: managedDepartmentNames,
+          last_connection_at: profile.last_connection_at,
         };
       });
 
@@ -591,6 +594,7 @@ export default function UserManagement() {
                     <TableHead>Email</TableHead>
                     <TableHead>Departamento</TableHead>
                     <TableHead>Rol</TableHead>
+                    <TableHead>Última conexión</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -610,6 +614,9 @@ export default function UserManagement() {
                         </div>
                       </TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatLastConnection(user.last_connection_at)}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
                           <Button
