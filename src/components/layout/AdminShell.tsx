@@ -14,8 +14,6 @@ import {
   TriangleAlert,
   Bell,
   LogOut,
-  Menu,
-  X,
   ChevronDown,
   FolderKanban,
   Briefcase,
@@ -64,8 +62,6 @@ const SidebarBrand = memo(function SidebarBrand() {
 });
 
 const SIDEBAR_SCROLL_KEY = 'admin-shell-sidebar-scroll';
-const MOBILE_SIDEBAR_SCROLL_KEY = 'admin-shell-mobile-sidebar-scroll';
-
 const navItems: NavItem[] = [
   { href: '/', label: 'Inicio', icon: LayoutDashboard },
   { href: '/attendance', label: 'Marcar', icon: Clock, excludeRoles: ['global_manager', 'superadmin'] },
@@ -84,14 +80,13 @@ const navItems: NavItem[] = [
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     attendance: true,
     management: true,
   });
   const { profile, role, signOut } = useAuth();
   const desktopNavRef = useRef<HTMLElement | null>(null);
-  const mobileNavRef = useRef<HTMLDivElement | null>(null);
   const { departments } = useDepartments();
   const location = useLocation();
 
@@ -130,6 +125,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     ['/', '/profile', '/notifications'].includes(item.href)
   );
 
+  const mobileVisibleItems = filteredNavItems.slice(0, 4);
+  const mobileOverflowItems = filteredNavItems.slice(4);
+
   const toggleGroup = (groupKey: string) => {
     setOpenGroups((current) => ({ ...current, [groupKey]: !current[groupKey] }));
   };
@@ -139,11 +137,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     const desktopSaved = window.sessionStorage.getItem(SIDEBAR_SCROLL_KEY);
     if (desktopSaved && desktopNavRef.current) {
       desktopNavRef.current.scrollTop = Number(desktopSaved);
-    }
-
-    const mobileSaved = window.sessionStorage.getItem(MOBILE_SIDEBAR_SCROLL_KEY);
-    if (mobileSaved && mobileNavRef.current) {
-      mobileNavRef.current.scrollTop = Number(mobileSaved);
     }
   }, []);
 
@@ -158,14 +151,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const mobile = mobileNavRef.current;
-    if (!mobile) return;
-
-    const onScroll = () => window.sessionStorage.setItem(MOBILE_SIDEBAR_SCROLL_KEY, String(mobile.scrollTop));
-    mobile.addEventListener('scroll', onScroll);
-
-    return () => mobile.removeEventListener('scroll', onScroll);
-  }, [mobileMenuOpen]);
+    setMobileMoreOpen(false);
+  }, [location.pathname]);
 
   const NavLinkItem = ({ item, nested = false }: { item: NavItem; nested?: boolean }) => {
         const isActive = location.pathname === item.href;
@@ -173,7 +160,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <Link
             key={item.href}
             to={item.href}
-            onClick={() => setMobileMenuOpen(false)}
+            onClick={() => setMobileMoreOpen(false)}
             className={cn(
               'group flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200',
               isActive
@@ -231,48 +218,84 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card/95 backdrop-blur-md border-b z-50 px-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img
-            src="/logo-control-asistencia.svg"
-            alt="Control de Asistencia ELINEAS"
-            className="h-8 w-8 rounded-md object-cover"
-          />
-          <span className="font-semibold text-sm leading-tight">Asistencia ELINEAS</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <NotificationBell className="h-9 w-9" />
-          <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
-        </div>
-      </header>
-
-      {mobileMenuOpen && (
-        <div className="lg:hidden fixed inset-0 bg-background/70 backdrop-blur-sm z-40" onClick={() => setMobileMenuOpen(false)} />
-      )}
-
-      <aside
-        className={cn(
-          'lg:hidden fixed top-16 left-0 bottom-0 w-72 bg-card/95 backdrop-blur-md border-r z-50 transform transition-transform duration-200 flex flex-col overflow-hidden',
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        )}
-      >
-        <div ref={mobileNavRef} className="p-4 space-y-2 flex-1 overflow-y-auto">
-          <NavLinks />
-        </div>
-        <div className="p-4 border-t bg-card/70 shrink-0">
-          <div className="mb-3">
-            <p className="font-medium text-sm">{profile?.full_name}</p>
-            <p className="text-xs text-muted-foreground capitalize">{role?.replace('_', ' ')}</p>
-            <p className="text-xs text-muted-foreground">Departamento: {departmentName || 'Sin departamento'}</p>
+      <div className="lg:hidden fixed bottom-3 left-0 right-0 z-50 px-4">
+        {mobileMoreOpen && mobileOverflowItems.length > 0 && (
+          <div className="mx-auto mb-2 max-w-md rounded-2xl border bg-card/95 p-2 shadow-lg backdrop-blur-md">
+            <div className="grid grid-cols-2 gap-1.5">
+              {mobileOverflowItems.map((item) => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    onClick={() => setMobileMoreOpen(false)}
+                    className={cn(
+                      'flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
+                      isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/60'
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
-          <Button variant="outline" className="w-full" onClick={signOut}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Cerrar sesión
-          </Button>
+        )}
+
+        <div className="mx-auto grid max-w-md grid-cols-6 rounded-2xl border bg-card/95 p-1.5 shadow-lg backdrop-blur-md">
+          {mobileVisibleItems.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                className={cn(
+                  'flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors',
+                  isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+                )}
+              >
+                <item.icon className="h-4 w-4" />
+                <span className="leading-none text-center">{item.label}</span>
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMoreOpen(false);
+              void signOut();
+            }}
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="leading-none text-center">Salir</span>
+          </button>
+          {mobileOverflowItems.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setMobileMoreOpen((current) => !current)}
+              className={cn(
+                'flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors',
+                mobileMoreOpen ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+              )}
+            >
+              <span className="text-base leading-none">{mobileMoreOpen ? '✕' : '☰'}</span>
+              <span className="leading-none text-center">Más</span>
+            </button>
+          )}
+          {mobileOverflowItems.length === 0 && (
+            <button
+              type="button"
+              disabled
+              className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium text-muted-foreground/60"
+            >
+              <span className="text-base leading-none">☰</span>
+              <span className="leading-none text-center">Más</span>
+            </button>
+          )}
         </div>
-      </aside>
+      </div>
 
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-72 bg-card/95 backdrop-blur-md border-r overflow-hidden">
         <div className="p-5 border-b bg-muted/30">
@@ -294,7 +317,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="lg:pl-72 pt-16 lg:pt-0 min-h-screen">
+      <main className="lg:pl-72 pt-4 pb-20 lg:pb-0 lg:pt-0 min-h-screen">
         <div className="p-4 lg:p-8 max-w-[1600px] mx-auto">{children}</div>
       </main>
     </div>
