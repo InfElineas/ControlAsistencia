@@ -105,23 +105,26 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--gradient-hero)' }}>
-      <Card className="w-full max-w-md animate-slide-up">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
+    <div
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: 'linear-gradient(165deg, #163B73 5%, #264F91 55%, #2CAEC2 100%)' }}
+    >
+      <Card className="w-full max-w-md animate-slide-up rounded-[2rem] border-0 bg-[#F1F4F9]/95 shadow-2xl">
+        <CardHeader className="text-center pt-10">
+          <div className="flex justify-center mb-5">
             <img
               src="/logo-control-asistencia.svg"
               alt="Control de Asistencia ELINEAS"
-              className="h-20 w-20 rounded-xl object-cover shadow-lg"
+              className="h-24 w-24 rounded-2xl bg-black p-2 object-contain shadow-lg"
             />
           </div>
-          <CardTitle className="text-2xl">Control de Asistencia ELINEAS</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-[2.1rem] leading-tight text-slate-800">Control de Asistencia ELINEAS</CardTitle>
+          <CardDescription className="text-lg text-slate-500 mt-2">
             {isLogin ? 'Inicia sesión para marcar asistencia' : 'Crea tu cuenta'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <CardContent className="pb-10">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {!isLogin && (
               <div className="space-y-2">
                 <Label htmlFor="fullName">Nombre completo</Label>
@@ -130,6 +133,7 @@ export default function Auth() {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Tu nombre"
+                  className="h-14 rounded-2xl border-slate-200 bg-white/80 px-4 text-lg placeholder:text-slate-400"
                   required={!isLogin}
                 />
               </div>
@@ -143,25 +147,27 @@ export default function Auth() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="Ej: 5512345678"
+                  className="h-14 rounded-2xl border-slate-200 bg-white/80 px-4 text-lg placeholder:text-slate-400"
                   required={!isLogin}
                 />
               </div>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-slate-700 text-[1.1rem]">Email</Label>
               <Input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@email.com"
+                className="h-14 rounded-2xl border-slate-200 bg-white/80 px-4 text-lg placeholder:text-slate-400"
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
+              <Label htmlFor="password" className="text-slate-700 text-[1.1rem]">Contraseña</Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -169,7 +175,7 @@ export default function Auth() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••"
-                  className="pr-10"
+                  className="h-14 rounded-2xl border-slate-200 bg-white/80 px-4 pr-12 text-lg placeholder:text-slate-400"
                   required
                 />
                 <button
@@ -192,7 +198,7 @@ export default function Auth() {
                   </div>
                 ) : (
                   <Select value={departmentId} onValueChange={setDepartmentId}>
-                    <SelectTrigger id="department">
+                    <SelectTrigger id="department" className="h-14 rounded-2xl border-slate-200 bg-white/80 px-4 text-base">
                       <SelectValue placeholder="Selecciona departamento" />
                     </SelectTrigger>
                     <SelectContent className="bg-popover z-50">
@@ -220,7 +226,11 @@ export default function Auth() {
               </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full h-14 rounded-2xl bg-[#1D3F75] text-2xl font-semibold hover:bg-[#183664]"
+              disabled={loading}
+            >
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -232,8 +242,8 @@ export default function Auth() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm">
-            <span className="text-muted-foreground">
+          <div className="mt-8 text-center text-[1.1rem]">
+            <span className="text-slate-500">
               {isLogin ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}
             </span>{' '}
             <button
@@ -243,7 +253,7 @@ export default function Auth() {
                 setError('');
                 setSuccessMessage('');
               }}
-              className="text-primary font-medium hover:underline"
+              className="text-[#1D3F75] font-semibold hover:underline"
             >
               {isLogin ? 'Regístrate' : 'Inicia sesión'}
             </button>

@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
 import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
+import { formatLastConnection } from '@/lib/last-connection';
 
 interface DepartmentEmployee {
   id: string;
@@ -41,6 +42,7 @@ interface DepartmentEmployee {
   email: string;
   phone: string | null;
   role: string;
+  last_connection_at: string | null;
 }
 
 interface AbsenceReview {
@@ -53,6 +55,7 @@ interface AttendanceSummary {
   employeeName: string;
   email: string;
   phone: string | null;
+  last_connection_at: string | null;
   role: string;
   todayStatus: 'PRESENTE' | 'TARDE' | 'AUSENTE' | 'DESCANSO' | 'NO_LABORABLE' | null;
   inTime: string | null;
@@ -131,7 +134,7 @@ export default function Department() {
     // Fetch employees in department (excluding department heads and global managers)
     const { data: empData } = await supabase
       .from('profiles')
-      .select('id, user_id, full_name, email, phone')
+      .select('id, user_id, full_name, email, phone, last_connection_at')
       .eq('department_id', selectedDepartmentId);
 
     // Filter out department heads and global managers from attendance statistics
@@ -189,6 +192,7 @@ export default function Department() {
           employeeName: emp.full_name,
           email: emp.email,
           phone: emp.phone,
+          last_connection_at: emp.last_connection_at,
           role: emp.role,
           todayStatus: currentDepartmentPaused
             ? 'NO_LABORABLE'
@@ -434,6 +438,7 @@ export default function Department() {
                     <TableHead>Salida</TableHead>
                     <TableHead>Ubicación</TableHead>
                     <TableHead>Ausencia</TableHead>
+                    <TableHead>Última conexión</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -503,6 +508,9 @@ export default function Department() {
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatLastConnection(row.last_connection_at)}
                       </TableCell>
                     </TableRow>
                   ))}
