@@ -1,0 +1,8 @@
+{
+  "appId": "com.elineas.asistencia",
+  "appName": "Control de Asistencia",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
