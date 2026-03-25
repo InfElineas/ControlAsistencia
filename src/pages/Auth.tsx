@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Loader2, AlertCircle, Eye, EyeOff, User, Phone, Mail, Lock, Building2 } from 'lucide-react';
 import { z } from 'zod';
 import { mapAuthError } from '@/lib/error-messages';
 
@@ -105,11 +105,10 @@ export default function Auth() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(165deg, #163B73 5%, #264F91 55%, #2CAEC2 100%)' }}
-    >
-      <Card className="w-full max-w-md animate-slide-up rounded-[2rem] border-0 bg-[#F1F4F9]/95 shadow-2xl">
+    <div className="relative min-h-screen flex items-center justify-center overflow-hidden p-4">
+      <div className="absolute inset-0 bg-gradient-to-b from-[#173B72] via-[#2A59A1] to-[#61B5E4]" />
+      <div className="pointer-events-none absolute inset-0 opacity-70" style={{ backgroundImage: 'radial-gradient(circle at 20% 85%, rgba(255,255,255,0.5) 1px, transparent 2px), radial-gradient(circle at 80% 75%, rgba(255,255,255,0.45) 1px, transparent 2px)', backgroundSize: '28px 28px' }} />
+      <Card className="relative z-10 w-full max-w-md animate-slide-up rounded-[2.3rem] border border-white/20 bg-gradient-to-b from-[#f4f6fd]/95 via-[#f5f8ff]/95 to-[#eff3ff]/95 shadow-[0_30px_80px_rgba(18,56,125,0.5)]">
         <CardHeader className="text-center pt-10">
           <div className="flex justify-center mb-5">
             <img
@@ -127,7 +126,10 @@ export default function Auth() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {!isLogin && (
               <div className="space-y-2">
-                <Label htmlFor="fullName">Nombre completo</Label>
+                <Label htmlFor="fullName" className="inline-flex items-center gap-2 text-slate-700 text-[1.1rem]">
+                  <User className="h-4 w-4 text-[#2C5CA8]" />
+                  Nombre completo
+                </Label>
                 <Input
                   id="fullName"
                   value={fullName}
@@ -141,7 +143,10 @@ export default function Auth() {
 
             {!isLogin && (
               <div className="space-y-2">
-                <Label htmlFor="phone">Teléfono</Label>
+                <Label htmlFor="phone" className="inline-flex items-center gap-2 text-slate-700 text-[1.1rem]">
+                  <Phone className="h-4 w-4 text-[#2C5CA8]" />
+                  Teléfono
+                </Label>
                 <Input
                   id="phone"
                   value={phone}
@@ -154,7 +159,10 @@ export default function Auth() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-700 text-[1.1rem]">Email</Label>
+              <Label htmlFor="email" className="inline-flex items-center gap-2 text-slate-700 text-[1.1rem]">
+                <Mail className="h-4 w-4 text-[#2C5CA8]" />
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -167,7 +175,10 @@ export default function Auth() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-700 text-[1.1rem]">Contraseña</Label>
+              <Label htmlFor="password" className="inline-flex items-center gap-2 text-slate-700 text-[1.1rem]">
+                <Lock className="h-4 w-4 text-[#2C5CA8]" />
+                Contraseña
+              </Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -191,7 +202,10 @@ export default function Auth() {
 
             {!isLogin && (
               <div className="space-y-2">
-                <Label htmlFor="department">Departamento</Label>
+                <Label htmlFor="department" className="inline-flex items-center gap-2 text-slate-700 text-[1.1rem]">
+                  <Building2 className="h-4 w-4 text-[#2C5CA8]" />
+                  Departamento
+                </Label>
                 {deptLoading ? (
                   <div className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground">
                     Cargando departamentos...
