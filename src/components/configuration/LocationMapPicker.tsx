@@ -1,6 +1,7 @@
 import type { MouseEventHandler } from 'react';
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
+import { isNativeRuntime } from '@/lib/mobile-runtime';
 
 interface LocationMapPickerProps {
   latitude: number;
@@ -60,6 +61,14 @@ export function LocationMapPicker({ latitude, longitude, radiusMeters, onChange 
   };
 
   const useCurrentLocation = () => {
+    const nativeGeolocation = window.Capacitor?.Plugins?.Geolocation;
+    if (isNativeRuntime() && nativeGeolocation?.getCurrentPosition) {
+      nativeGeolocation
+        .getCurrentPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 })
+        .then((result) => onChange({ lat: result.coords.latitude, lng: result.coords.longitude }));
+      return;
+    }
+
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition((result) => {
       onChange({ lat: result.coords.latitude, lng: result.coords.longitude });
