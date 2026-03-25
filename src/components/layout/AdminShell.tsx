@@ -241,12 +241,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             />
             <span className="font-semibold text-sm leading-tight">Asistencia ELINEAS</span>
           </div>
-          <div className="flex items-center gap-2">
-            <NotificationBell className="h-9 w-9" />
-            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </Button>
-          </div>
+          <span className="text-xs text-muted-foreground">Panel</span>
         </div>
       </header>
 
@@ -256,7 +251,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <aside
         className={cn(
-          'lg:hidden fixed top-20 left-3 bottom-3 w-72 rounded-2xl bg-card/95 backdrop-blur-md border z-50 transform transition-transform duration-200 flex flex-col overflow-hidden shadow-lg',
+          'lg:hidden fixed top-20 left-3 bottom-24 w-72 rounded-2xl bg-card/95 backdrop-blur-md border z-50 transform transition-transform duration-200 flex flex-col overflow-hidden shadow-lg',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -275,6 +270,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </Button>
         </div>
       </aside>
+
+      <div className="lg:hidden fixed bottom-3 left-0 right-0 z-50 px-4">
+        <div className="mx-auto flex max-w-sm items-center justify-center gap-3 rounded-2xl border bg-card/95 p-2 shadow-lg backdrop-blur-md">
+          <NotificationBell className="h-10 w-10" />
+          <Button
+            variant={mobileMenuOpen ? "secondary" : "default"}
+            size="sm"
+            className="h-10 rounded-xl px-4"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X className="h-4 w-4 mr-2" /> : <Menu className="h-4 w-4 mr-2" />}
+            Menú
+          </Button>
+        </div>
+      </div>
 
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-72 bg-card/95 backdrop-blur-md border-r overflow-hidden">
         <div className="p-5 border-b bg-muted/30">
@@ -296,7 +306,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="lg:pl-72 pt-20 lg:pt-0 min-h-screen">
+      <main className="lg:pl-72 pt-20 pb-20 lg:pb-0 lg:pt-0 min-h-screen">
         <div className="p-4 lg:p-8 max-w-[1600px] mx-auto">{children}</div>
       </main>
     </div>
