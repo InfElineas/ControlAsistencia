@@ -23,6 +23,7 @@ import Incidents from "./pages/Incidents";
 import SuperAdmin from "./pages/SuperAdmin";
 import NotFound from "./pages/NotFound";
 import NotificationsPage from "./pages/Notifications";
+import GpsDiagnostics from "./pages/GpsDiagnostics";
 import { isNativeRuntime } from '@/lib/mobile-runtime';
 
 const queryClient = new QueryClient();
@@ -148,6 +149,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/gps-diagnostics"
+              element={
+                <ProtectedRoute>
+                  <GpsDiagnostics />
                 </ProtectedRoute>
               }
             />

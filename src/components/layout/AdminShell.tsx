@@ -11,6 +11,7 @@ import {
   UserCog,
   ShieldCheck,
   User,
+  LocateFixed,
   TriangleAlert,
   Bell,
   LogOut,
@@ -68,6 +69,7 @@ const navItems: NavItem[] = [
   { href: '/history', label: 'Mi Historial', icon: History, excludeRoles: ['global_manager', 'superadmin'] },
   { href: '/incidents', label: 'Incidencias', icon: TriangleAlert },
   { href: '/profile', label: 'Mi perfil', icon: User },
+  { href: '/gps-diagnostics', label: 'Mi ubicación', icon: LocateFixed },
   { href: '/notifications', label: 'Notificaciones', icon: Bell },
   { href: '/rest-schedule', label: 'Descansos', icon: Calendar },
   { href: '/vacations', label: 'Vacaciones', icon: PlaneTakeoff, excludeRoles: ['global_manager', 'superadmin'] },
@@ -122,7 +124,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   ].filter((group) => group.items.length > 0);
 
   const topLevelItems = filteredNavItems.filter((item) =>
-    ['/', '/profile', '/notifications'].includes(item.href)
+    ['/', '/profile', '/gps-diagnostics', '/notifications'].includes(item.href)
   );
 
   const mobileVisibleItems = filteredNavItems.slice(0, 4);
