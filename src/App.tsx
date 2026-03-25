@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
 import { AppRouterBoundary } from '@/components/AppRouterBoundary';
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
@@ -23,8 +23,11 @@ import Incidents from "./pages/Incidents";
 import SuperAdmin from "./pages/SuperAdmin";
 import NotFound from "./pages/NotFound";
 import NotificationsPage from "./pages/Notifications";
+import GpsDiagnostics from "./pages/GpsDiagnostics";
+import { isNativeRuntime } from '@/lib/mobile-runtime';
 
 const queryClient = new QueryClient();
+const RouterComponent = isNativeRuntime() ? HashRouter : BrowserRouter;
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -33,7 +36,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <NotificationsProvider>
-        <BrowserRouter>
+        <RouterComponent>
           <AppRouterBoundary>
           <Routes>
             <Route path="/auth" element={<Auth />} />
@@ -149,10 +152,18 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/gps-diagnostics"
+              element={
+                <ProtectedRoute>
+                  <GpsDiagnostics />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </AppRouterBoundary>
-        </BrowserRouter>
+        </RouterComponent>
         </NotificationsProvider>
       </TooltipProvider>
     </AuthProvider>
