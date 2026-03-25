@@ -99,6 +99,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const departmentName = departments.find((department) => department.id === profile?.department_id)?.name;
 
   const filteredNavItems = navItems.filter((item) => {
+    if (role === 'employee' && item.href === '/') {
+      return false;
+    }
     if (item.excludeRoles && role && item.excludeRoles.includes(role)) {
       return false;
     }
