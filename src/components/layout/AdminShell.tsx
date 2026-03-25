@@ -231,20 +231,22 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card/95 backdrop-blur-md border-b z-50 px-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img
-            src="/logo-control-asistencia.svg"
-            alt="Control de Asistencia ELINEAS"
-            className="h-8 w-8 rounded-md object-cover"
-          />
-          <span className="font-semibold text-sm leading-tight">Asistencia ELINEAS</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <NotificationBell className="h-9 w-9" />
-          <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 p-3">
+        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between rounded-2xl border bg-card/95 px-3 shadow-sm backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <img
+              src="/logo-control-asistencia.svg"
+              alt="Control de Asistencia ELINEAS"
+              className="h-8 w-8 rounded-md object-cover"
+            />
+            <span className="font-semibold text-sm leading-tight">Asistencia ELINEAS</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <NotificationBell className="h-9 w-9" />
+            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -254,7 +256,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
       <aside
         className={cn(
-          'lg:hidden fixed top-16 left-0 bottom-0 w-72 bg-card/95 backdrop-blur-md border-r z-50 transform transition-transform duration-200 flex flex-col overflow-hidden',
+          'lg:hidden fixed top-20 left-3 bottom-3 w-72 rounded-2xl bg-card/95 backdrop-blur-md border z-50 transform transition-transform duration-200 flex flex-col overflow-hidden shadow-lg',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -294,7 +296,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="lg:pl-72 pt-16 lg:pt-0 min-h-screen">
+      <main className="lg:pl-72 pt-20 lg:pt-0 min-h-screen">
         <div className="p-4 lg:p-8 max-w-[1600px] mx-auto">{children}</div>
       </main>
     </div>
