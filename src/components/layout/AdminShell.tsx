@@ -125,8 +125,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     ['/', '/profile', '/notifications'].includes(item.href)
   );
 
-  const mobileVisibleItems = filteredNavItems.slice(0, 3);
-  const mobileOverflowItems = filteredNavItems.slice(3);
+  const mobileVisibleItems = filteredNavItems.slice(0, 4);
+  const mobileOverflowItems = filteredNavItems.slice(4);
 
   const toggleGroup = (groupKey: string) => {
     setOpenGroups((current) => ({ ...current, [groupKey]: !current[groupKey] }));
@@ -243,7 +243,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </div>
         )}
 
-        <div className={cn('mx-auto grid max-w-md rounded-2xl border bg-card/95 p-1.5 shadow-lg backdrop-blur-md', mobileOverflowItems.length > 0 ? 'grid-cols-5' : 'grid-cols-4')}>
+        <div className="mx-auto grid max-w-md grid-cols-6 rounded-2xl border bg-card/95 p-1.5 shadow-lg backdrop-blur-md">
           {mobileVisibleItems.map((item) => {
             const isActive = location.pathname === item.href;
             return (
@@ -281,6 +281,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               )}
             >
               <span className="text-base leading-none">{mobileMoreOpen ? '✕' : '☰'}</span>
+              <span className="leading-none text-center">Más</span>
+            </button>
+          )}
+          {mobileOverflowItems.length === 0 && (
+            <button
+              type="button"
+              disabled
+              className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium text-muted-foreground/60"
+            >
+              <span className="text-base leading-none">☰</span>
               <span className="leading-none text-center">Más</span>
             </button>
           )}
