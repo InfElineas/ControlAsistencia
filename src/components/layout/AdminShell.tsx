@@ -25,6 +25,8 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useDepartments } from '@/hooks/useDepartments';
 import { NotificationBell } from '@/components/layout/NotificationBell';
+import { useNotifications } from '@/contexts/NotificationsContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NavItem {
   href: string;
@@ -83,11 +85,13 @@ const navItems: NavItem[] = [
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [pendingIncidentsCount, setPendingIncidentsCount] = useState(0);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     attendance: true,
     management: true,
   });
   const { profile, role, signOut } = useAuth();
+  const { unreadCount } = useNotifications();
   const desktopNavRef = useRef<HTMLElement | null>(null);
   const { departments } = useDepartments();
   const location = useLocation();
@@ -129,6 +133,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   const mobileVisibleItems = filteredNavItems.slice(0, 4);
   const mobileOverflowItems = filteredNavItems.slice(4);
+  const mobileQuickAction =
+    filteredNavItems.find((item) => item.href === '/configuration') ||
+    filteredNavItems.find((item) => item.href === '/gps-diagnostics') ||
+    filteredNavItems.find((item) => item.href === '/profile') ||
+    filteredNavItems[0];
 
   const toggleGroup = (groupKey: string) => {
     setOpenGroups((current) => ({ ...current, [groupKey]: !current[groupKey] }));
@@ -156,6 +165,37 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     setMobileMoreOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    const fetchPendingIncidentsCount = async () => {
+      if (!profile?.user_id) {
+        setPendingIncidentsCount(0);
+        return;
+      }
+
+      let query = supabase
+        .from('attendance_incidents')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      if (role === 'employee') {
+        query = query.eq('user_id', profile.user_id);
+      }
+
+      const { count } = await query;
+      setPendingIncidentsCount(count ?? 0);
+    };
+
+    void fetchPendingIncidentsCount();
+    const intervalId = window.setInterval(() => void fetchPendingIncidentsCount(), 60000);
+    return () => window.clearInterval(intervalId);
+  }, [profile?.user_id, role]);
+
+  const getBadgeCount = (href: string): number | null => {
+    if (href === '/notifications') return unreadCount;
+    if (href === '/incidents') return pendingIncidentsCount;
+    return null;
+  };
+
   const NavLinkItem = ({ item, nested = false }: { item: NavItem; nested?: boolean }) => {
         const isActive = location.pathname === item.href;
         return (
@@ -172,8 +212,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
             )}
           >
-            <item.icon className="h-5 w-5 transition-transform group-hover:scale-105" />
+            <item.icon className="h-5 w-5 shrink-0 transition-transform group-hover:scale-105" />
             <span className="text-sm font-medium">{item.label}</span>
+            {getBadgeCount(item.href) !== null && (getBadgeCount(item.href) ?? 0) > 0 && (
+              <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {getBadgeCount(item.href)}
+              </span>
+            )}
           </Link>
         );
   };
@@ -236,11 +281,29 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                       isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/60'
                     )}
                   >
-                    <item.icon className="h-4 w-4" />
+                    <div className="relative">
+                      <item.icon className="h-4 w-4" />
+                      {getBadgeCount(item.href) !== null && (getBadgeCount(item.href) ?? 0) > 0 && (
+                        <span className="absolute -right-2 -top-2 inline-flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-white">
+                          {getBadgeCount(item.href)}
+                        </span>
+                      )}
+                    </div>
                     <span>{item.label}</span>
                   </Link>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMoreOpen(false);
+                  void signOut();
+                }}
+                className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Salir</span>
+              </button>
             </div>
           </div>
         )}
@@ -257,22 +320,28 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
                 )}
               >
-                <item.icon className="h-4 w-4" />
+                <div className="relative">
+                  <item.icon className="h-4 w-4" />
+                  {getBadgeCount(item.href) !== null && (getBadgeCount(item.href) ?? 0) > 0 && (
+                    <span className="absolute -right-2 -top-2 inline-flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-semibold text-white">
+                      {getBadgeCount(item.href)}
+                    </span>
+                  )}
+                </div>
                 <span className="leading-none text-center">{item.label}</span>
               </Link>
             );
           })}
-          <button
-            type="button"
-            onClick={() => {
-              setMobileMoreOpen(false);
-              void signOut();
-            }}
-            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60"
+          <Link
+            to={mobileQuickAction?.href ?? '/'}
+            className={cn(
+              'flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors',
+              location.pathname === mobileQuickAction?.href ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+            )}
           >
-            <LogOut className="h-4 w-4" />
-            <span className="leading-none text-center">Salir</span>
-          </button>
+            {mobileQuickAction ? <mobileQuickAction.icon className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
+            <span className="leading-none text-center">{mobileQuickAction?.label ?? 'Acceso'}</span>
+          </Link>
           {mobileOverflowItems.length > 0 && (
             <button
               type="button"
