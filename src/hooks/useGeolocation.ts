@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { isNativeRuntime } from '@/lib/mobile-runtime';
 
 interface GeolocationState {
   latitude: number | null;
@@ -47,6 +48,35 @@ export function useGeolocation() {
   });
 
   const getCurrentPosition = useCallback(() => {
+    const nativeGeolocation = window.Capacitor?.Plugins?.Geolocation;
+
+    if (isNativeRuntime() && nativeGeolocation?.getCurrentPosition) {
+      setState(prev => ({ ...prev, loading: true, error: null }));
+      nativeGeolocation
+        .getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        })
+        .then((position) => {
+          setState({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            error: null,
+            loading: false,
+          });
+        })
+        .catch(() => {
+          setState(prev => ({
+            ...prev,
+            error: 'No se pudo obtener ubicación nativa del dispositivo',
+            loading: false,
+          }));
+        });
+      return;
+    }
+
     if (!navigator.geolocation) {
       setState(prev => ({
         ...prev,

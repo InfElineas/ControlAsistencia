@@ -13,6 +13,7 @@ interface UserProfile {
   full_name: string;
   department_id: string;
   phone: string | null;
+  last_connection_at: string | null;
 }
 
 interface AuthContextType {
@@ -47,6 +48,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const updateLastConnection = async (userId: string) => {
+    const cacheKey = `last-connection-updated-at:${userId}`;
+    const lastUpdatedAt = window.sessionStorage.getItem(cacheKey);
+
+    if (lastUpdatedAt) {
+      const elapsed = Date.now() - Number(lastUpdatedAt);
+      if (!Number.isNaN(elapsed) && elapsed < 1000 * 60 * 5) return;
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ last_connection_at: new Date().toISOString() })
+      .eq('user_id', userId);
+
+    if (!error) {
+      window.sessionStorage.setItem(cacheKey, String(Date.now()));
+    }
+  };
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -107,8 +127,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           phone:
             (typeof authUser.user_metadata?.phone === 'string' && authUser.user_metadata.phone) ||
             null,
+          last_connection_at: null,
         }
       );
+
+      void updateLastConnection(authUser.id);
 
       // Fetch role
       const { data: roleRows, error: roleError } = await supabase
@@ -135,6 +158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           phone:
             (typeof authUser.user_metadata?.phone === 'string' && authUser.user_metadata.phone) ||
             null,
+          last_connection_at: null,
         }
       );
       setRole((prevRole) => prevRole || 'employee');
