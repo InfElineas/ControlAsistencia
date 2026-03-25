@@ -269,7 +269,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 mobileMoreOpen ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
               )}
             >
-              {mobileMoreOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              <span className="text-base leading-none">{mobileMoreOpen ? '✕' : '☰'}</span>
               <span className="leading-none text-center">Más</span>
             </button>
           )}
