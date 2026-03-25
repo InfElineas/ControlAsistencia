@@ -262,21 +262,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <div className="lg:hidden fixed bottom-3 left-0 right-0 z-50 px-4">
-        <div className="mx-auto flex max-w-sm items-center justify-center gap-3 rounded-2xl border bg-card/95 p-2 shadow-lg backdrop-blur-md">
-          <NotificationBell className="h-10 w-10" />
-          <Button
-            variant={mobileMenuOpen ? "secondary" : "default"}
-            size="sm"
-            className="h-10 rounded-xl px-4"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            {mobileMenuOpen ? <X className="h-4 w-4 mr-2" /> : <Menu className="h-4 w-4 mr-2" />}
-            Menú
-          </Button>
-        </div>
-      </div>
-
       <aside className="hidden lg:flex lg:flex-col lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:w-72 bg-card/95 backdrop-blur-md border-r overflow-hidden">
         <div className="p-5 border-b bg-muted/30">
           <SidebarBrand />

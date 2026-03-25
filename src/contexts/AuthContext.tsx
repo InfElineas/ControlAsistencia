@@ -189,18 +189,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const normalizedEmail = email.trim().toLowerCase();
     const redirectUrl = resolveAuthRedirectUrl(window.location.origin);
-
-    if (!redirectUrl) {
-      return {
-        error: new Error('No se pudo determinar la URL de confirmación. Configura VITE_PUBLIC_APP_URL con tu dominio público.'),
-      };
-    }
     
     const { error } = await supabase.auth.signUp({
       email: normalizedEmail,
       password,
       options: {
-        emailRedirectTo: redirectUrl,
+        ...(redirectUrl ? { emailRedirectTo: redirectUrl } : {}),
         data: {
           full_name: fullName,
           department_id: departmentId,
