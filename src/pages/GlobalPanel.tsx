@@ -417,15 +417,40 @@ export default function GlobalPanel() {
   );
 
   const departmentHeadcount = useMemo(() => {
-    const map = new Map<string, number>();
-    employees.forEach((employee) => {
-      map.set(employee.department_name, (map.get(employee.department_name) || 0) + 1);
+    type DepartmentSummary = {
+      department: string;
+      total: number;
+      ok: number;
+      late: number;
+      rest: number;
+      absent: number;
+    };
+
+    const map = new Map<string, DepartmentSummary>();
+
+    attendance.forEach((row) => {
+      if (!map.has(row.department)) {
+        map.set(row.department, {
+          department: row.department,
+          total: 0,
+          ok: 0,
+          late: 0,
+          rest: 0,
+          absent: 0,
+        });
+      }
+
+      const current = map.get(row.department)!;
+      current.total += 1;
+
+      if (row.todayStatus === 'PRESENTE') current.ok += 1;
+      else if (row.todayStatus === 'TARDE') current.late += 1;
+      else if (row.todayStatus === 'DESCANSO' || row.todayStatus === 'NO_LABORABLE') current.rest += 1;
+      else if (row.todayStatus === 'AUSENTE') current.absent += 1;
     });
 
-    return Array.from(map.entries())
-      .map(([department, count]) => ({ department, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [employees]);
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [attendance]);
 
   const metrics = {
     total: scopedAttendance.length,
@@ -596,11 +621,31 @@ export default function GlobalPanel() {
             <CardTitle>Trabajadores por departamento</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-3">
               {departmentHeadcount.map((item) => (
-                <div key={item.department} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
-                  <span className="text-muted-foreground">{item.department}</span>
-                  <span className="font-semibold">{item.count}</span>
+                <div key={item.department} className="rounded-xl border p-3 text-sm">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground">{item.department}</span>
+                    <span className="text-muted-foreground">{item.total}</span>
+                  </div>
+
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    {item.total > 0 && (
+                      <div className="flex h-full w-full">
+                        <div className="bg-emerald-500" style={{ width: `${(item.ok / item.total) * 100}%` }} />
+                        <div className="bg-amber-500" style={{ width: `${(item.late / item.total) * 100}%` }} />
+                        <div className="bg-sky-500" style={{ width: `${(item.rest / item.total) * 100}%` }} />
+                        <div className="bg-rose-500" style={{ width: `${(item.absent / item.total) * 100}%` }} />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Ok: {item.ok}</span>
+                    <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" /> Tarde: {item.late}</span>
+                    <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-500" /> Descanso: {item.rest}</span>
+                    <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Ausente: {item.absent}</span>
+                  </div>
                 </div>
               ))}
             </div>
