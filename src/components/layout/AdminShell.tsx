@@ -80,6 +80,7 @@ const navItems: NavItem[] = [
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     attendance: true,
     management: true,
@@ -124,23 +125,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     ['/', '/profile', '/notifications'].includes(item.href)
   );
 
-  const mobileNavItems = (() => {
-    if (role === 'employee') {
-      return filteredNavItems.filter((item) =>
-        ['/', '/profile', '/incidents', '/rest-schedule'].includes(item.href)
-      );
-    }
-
-    if (role === 'department_head') {
-      return filteredNavItems.filter((item) =>
-        ['/', '/department', '/incidents', '/profile'].includes(item.href)
-      );
-    }
-
-    return filteredNavItems.filter((item) =>
-      ['/', '/global', '/users', '/profile'].includes(item.href)
-    );
-  })();
+  const mobileVisibleItems = filteredNavItems.slice(0, 4);
+  const mobileOverflowItems = filteredNavItems.slice(4);
 
   const toggleGroup = (groupKey: string) => {
     setOpenGroups((current) => ({ ...current, [groupKey]: !current[groupKey] }));
@@ -164,12 +150,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return () => desktop.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => {
+    setMobileMoreOpen(false);
+  }, [location.pathname]);
+
   const NavLinkItem = ({ item, nested = false }: { item: NavItem; nested?: boolean }) => {
         const isActive = location.pathname === item.href;
         return (
           <Link
             key={item.href}
             to={item.href}
+            onClick={() => setMobileMoreOpen(false)}
             className={cn(
               'group flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200',
               isActive
@@ -227,23 +218,33 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 p-3">
-        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between rounded-2xl border bg-card/95 px-3 shadow-sm backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <img
-              src="/logo-control-asistencia.svg"
-              alt="Control de Asistencia ELINEAS"
-              className="h-8 w-8 rounded-md object-cover"
-            />
-            <span className="font-semibold text-sm leading-tight">Asistencia ELINEAS</span>
-          </div>
-          <span className="text-xs text-muted-foreground">Panel</span>
-        </div>
-      </header>
-
       <div className="lg:hidden fixed bottom-3 left-0 right-0 z-50 px-4">
-        <div className="mx-auto grid max-w-md grid-cols-4 rounded-2xl border bg-card/95 p-1.5 shadow-lg backdrop-blur-md">
-          {mobileNavItems.map((item) => {
+        {mobileMoreOpen && mobileOverflowItems.length > 0 && (
+          <div className="mx-auto mb-2 max-w-md rounded-2xl border bg-card/95 p-2 shadow-lg backdrop-blur-md">
+            <div className="grid grid-cols-2 gap-1.5">
+              {mobileOverflowItems.map((item) => {
+                const isActive = location.pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    to={item.href}
+                    onClick={() => setMobileMoreOpen(false)}
+                    className={cn(
+                      'flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
+                      isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted/60'
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className={cn('mx-auto grid max-w-md rounded-2xl border bg-card/95 p-1.5 shadow-lg backdrop-blur-md', mobileOverflowItems.length > 0 ? 'grid-cols-5' : 'grid-cols-4')}>
+          {mobileVisibleItems.map((item) => {
             const isActive = location.pathname === item.href;
             return (
               <Link
@@ -259,6 +260,19 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          {mobileOverflowItems.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setMobileMoreOpen((current) => !current)}
+              className={cn(
+                'flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors',
+                mobileMoreOpen ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
+              )}
+            >
+              {mobileMoreOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              <span className="leading-none text-center">Más</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -282,7 +296,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="lg:pl-72 pt-20 pb-20 lg:pb-0 lg:pt-0 min-h-screen">
+      <main className="lg:pl-72 pt-4 pb-20 lg:pb-0 lg:pt-0 min-h-screen">
         <div className="p-4 lg:p-8 max-w-[1600px] mx-auto">{children}</div>
       </main>
     </div>
