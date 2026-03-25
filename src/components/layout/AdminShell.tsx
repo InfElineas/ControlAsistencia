@@ -68,10 +68,10 @@ const SIDEBAR_SCROLL_KEY = 'admin-shell-sidebar-scroll';
 const navItems: NavItem[] = [
   { href: '/', label: 'Inicio', icon: LayoutDashboard },
   { href: '/attendance', label: 'Marcar', icon: Clock, excludeRoles: ['global_manager', 'superadmin'] },
-  { href: '/history', label: 'Mi Historial', icon: History, excludeRoles: ['global_manager', 'superadmin'] },
+  { href: '/history', label: 'Historial', icon: History, excludeRoles: ['global_manager', 'superadmin'] },
   { href: '/incidents', label: 'Incidencias', icon: TriangleAlert },
-  { href: '/profile', label: 'Mi perfil', icon: User },
-  { href: '/gps-diagnostics', label: 'Mi ubicación', icon: LocateFixed },
+  { href: '/profile', label: 'Perfil', icon: User },
+  { href: '/gps-diagnostics', label: 'Ubicación', icon: LocateFixed, excludeRoles: ['global_manager', 'superadmin'] },
   { href: '/notifications', label: 'Notificaciones', icon: Bell },
   { href: '/rest-schedule', label: 'Descansos', icon: Calendar },
   { href: '/vacations', label: 'Vacaciones', icon: PlaneTakeoff, excludeRoles: ['global_manager', 'superadmin'] },
@@ -388,8 +388,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="lg:pl-72 pt-4 pb-20 lg:pb-0 lg:pt-0 min-h-screen">
-        <div className="p-4 lg:p-8 max-w-[1600px] mx-auto">{children}</div>
+      <main className="lg:pl-72 pt-3 pb-20 lg:pb-0 lg:pt-0 min-h-screen">
+        <div className="p-3 lg:p-6 max-w-[1600px] mx-auto">{children}</div>
       </main>
     </div>
   );
