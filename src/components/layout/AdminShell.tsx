@@ -125,8 +125,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     ['/', '/profile', '/notifications'].includes(item.href)
   );
 
-  const mobileVisibleItems = filteredNavItems.slice(0, 4);
-  const mobileOverflowItems = filteredNavItems.slice(4);
+  const mobileVisibleItems = filteredNavItems.slice(0, 3);
+  const mobileOverflowItems = filteredNavItems.slice(3);
 
   const toggleGroup = (groupKey: string) => {
     setOpenGroups((current) => ({ ...current, [groupKey]: !current[groupKey] }));
@@ -260,6 +260,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMoreOpen(false);
+              void signOut();
+            }}
+            className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/60"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="leading-none text-center">Salir</span>
+          </button>
           {mobileOverflowItems.length > 0 && (
             <button
               type="button"
