@@ -70,6 +70,7 @@ export function IncidentsManagementPage() {
       let query = supabase
         .from('profiles')
         .select('user_id, full_name, email, department_id, last_connection_at, departments(name)')
+        .eq('is_active', true)
         .order('full_name', { ascending: true });
 
       if (role === 'department_head') {

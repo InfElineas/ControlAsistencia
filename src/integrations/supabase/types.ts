@@ -473,33 +473,48 @@ export type Database = {
       }
       profiles: {
         Row: {
+          contract_cancelled_at: string | null
           created_at: string
+          deactivated_at: string | null
+          deactivated_by: string | null
+          deactivation_reason: string | null
           department_id: string
           email: string
           full_name: string
           id: string
+          is_active: boolean
           last_connection_at: string | null
           phone: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          contract_cancelled_at?: string | null
           created_at?: string
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          deactivation_reason?: string | null
           department_id: string
           email: string
           full_name: string
           id?: string
+          is_active?: boolean
           last_connection_at?: string | null
           phone?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          contract_cancelled_at?: string | null
           created_at?: string
+          deactivated_at?: string | null
+          deactivated_by?: string | null
+          deactivation_reason?: string | null
           department_id?: string
           email?: string
           full_name?: string
           id?: string
+          is_active?: boolean
           last_connection_at?: string | null
           phone?: string | null
           updated_at?: string

@@ -135,7 +135,8 @@ export default function Department() {
     const { data: empData } = await supabase
       .from('profiles')
       .select('id, user_id, full_name, email, phone, last_connection_at')
-      .eq('department_id', selectedDepartmentId);
+      .eq('department_id', selectedDepartmentId)
+      .eq('is_active', true);
 
     // Filter out department heads and global managers from attendance statistics
     const { data: excludedRoles } = await supabase

@@ -43,7 +43,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useDepartments } from '@/hooks/useDepartments';
-import { Loader2, UserPlus, Shield, Users, Edit, Filter, Trash2 } from 'lucide-react';
+import { Loader2, UserPlus, Shield, Users, Edit, Filter, Trash2, UserX, RotateCcw } from 'lucide-react';
 import { z } from 'zod';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getHighestRole } from '@/lib/roles';
@@ -90,6 +90,10 @@ interface UserWithRole {
   managed_department_ids: string[];
   managed_department_names: string[];
   last_connection_at: string | null;
+  is_active: boolean;
+  deactivation_reason: string | null;
+  contract_cancelled_at: string | null;
+  deactivated_at: string | null;
 }
 
 const USERS_PAGE_SIZE = 10;
@@ -121,11 +125,13 @@ export default function UserManagement() {
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterStatus, setFilterStatus] = useState<'active' | 'inactive' | 'all'>('active');
   
   const filteredUsers = users.filter(user => {
     const matchesDepartment = filterDepartment === 'all' || user.department_id === filterDepartment;
     const matchesRole = filterRole === 'all' || user.role === filterRole;
-    return matchesDepartment && matchesRole;
+    const matchesStatus = filterStatus === 'all' || (filterStatus === 'active' ? user.is_active : !user.is_active);
+    return matchesDepartment && matchesRole && matchesStatus;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PAGE_SIZE));
@@ -146,6 +152,11 @@ export default function UserManagement() {
   const [deletingUser, setDeletingUser] = useState<UserWithRole | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [deactivatingUser, setDeactivatingUser] = useState<UserWithRole | null>(null);
+  const [deactivationReason, setDeactivationReason] = useState('');
+  const [contractCancelledAt, setContractCancelledAt] = useState('');
+  const [deactivating, setDeactivating] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -202,6 +213,10 @@ export default function UserManagement() {
           managed_department_ids: managedDepartmentIds,
           managed_department_names: managedDepartmentNames,
           last_connection_at: profile.last_connection_at,
+          is_active: profile.is_active ?? true,
+          deactivation_reason: profile.deactivation_reason ?? null,
+          contract_cancelled_at: profile.contract_cancelled_at ?? null,
+          deactivated_at: profile.deactivated_at ?? null,
         };
       });
 
@@ -227,6 +242,10 @@ export default function UserManagement() {
   useEffect(() => {
     setCurrentPage(1);
   }, [filterDepartment, filterRole]);
+  
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterStatus]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -392,6 +411,87 @@ export default function UserManagement() {
   const handleOpenDeleteDialog = (targetUser: UserWithRole) => {
     setDeletingUser(targetUser);
     setDeleteDialogOpen(true);
+  };
+
+  const handleOpenDeactivateDialog = (targetUser: UserWithRole) => {
+    setDeactivatingUser(targetUser);
+    setDeactivationReason('');
+    setContractCancelledAt('');
+    setDeactivateDialogOpen(true);
+  };
+
+  const handleDeactivateUser = async () => {
+    if (!deactivatingUser) return;
+    if (!deactivationReason.trim()) {
+      toast({ title: 'Motivo requerido', description: 'Debes indicar el motivo de baja del trabajador.', variant: 'destructive' });
+      return;
+    }
+    if (!contractCancelledAt) {
+      toast({ title: 'Fecha requerida', description: 'Debes indicar la fecha de cancelación de contrato.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setDeactivating(true);
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_active: false,
+          deactivation_reason: deactivationReason.trim(),
+          contract_cancelled_at: contractCancelledAt,
+          deactivated_at: new Date().toISOString(),
+          deactivated_by: currentUser?.id ?? null,
+        })
+        .eq('user_id', deactivatingUser.user_id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Trabajador dado de baja',
+        description: `${deactivatingUser.full_name} fue movido a la papelera de reciclaje.`,
+      });
+
+      setDeactivateDialogOpen(false);
+      setDeactivatingUser(null);
+      fetchUsers();
+    } catch (error: unknown) {
+      toast({
+        title: 'Error',
+        description: mapUserManagementError(error, 'update'),
+        variant: 'destructive',
+      });
+    } finally {
+      setDeactivating(false);
+    }
+  };
+
+  const handleRestoreUser = async (targetUser: UserWithRole) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_active: true,
+          deactivation_reason: null,
+          contract_cancelled_at: null,
+          deactivated_at: null,
+          deactivated_by: null,
+        })
+        .eq('user_id', targetUser.user_id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Usuario restaurado',
+        description: `${targetUser.full_name} vuelve a estar activo.`,
+      });
+      fetchUsers();
+    } catch (error: unknown) {
+      toast({
+        title: 'Error',
+        description: mapUserManagementError(error, 'update'),
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleDeleteUser = async () => {
@@ -573,6 +673,17 @@ export default function UserManagement() {
                     {role === 'superadmin' && <SelectItem value="superadmin">Superadmin</SelectItem>}
                   </SelectContent>
                 </Select>
+                <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as 'active' | 'inactive' | 'all')}>
+                  <SelectTrigger className="w-[170px]">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="active">Activos</SelectItem>
+                    <SelectItem value="inactive">Papelera</SelectItem>
+                    <SelectItem value="all">Todos</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           </CardHeader>
@@ -594,6 +705,7 @@ export default function UserManagement() {
                     <TableHead>Email</TableHead>
                     <TableHead>Departamento</TableHead>
                     <TableHead>Rol</TableHead>
+                    <TableHead>Estado</TableHead>
                     <TableHead>Última conexión</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
@@ -614,19 +726,56 @@ export default function UserManagement() {
                         </div>
                       </TableCell>
                       <TableCell>{getRoleBadge(user.role)}</TableCell>
+                      <TableCell>
+                        {user.is_active ? (
+                          <Badge variant="secondary">Activo</Badge>
+                        ) : (
+                          <div className="space-y-1">
+                            <Badge variant="outline" className="border-amber-400 text-amber-700">Papelera</Badge>
+                            <p className="text-xs text-muted-foreground">
+                              {user.contract_cancelled_at ? `Baja: ${user.contract_cancelled_at}` : 'Sin fecha'}
+                            </p>
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {formatLastConnection(user.last_connection_at)}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditUser(user)}
-                            aria-label={`Editar ${user.full_name}`}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          {user.is_active && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditUser(user)}
+                                aria-label={`Editar ${user.full_name}`}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenDeactivateDialog(user)}
+                                disabled={currentUser?.id === user.user_id}
+                                aria-label={`Dar de baja ${user.full_name}`}
+                                className="text-amber-600 hover:text-amber-700"
+                              >
+                                <UserX className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          {!user.is_active && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRestoreUser(user)}
+                              aria-label={`Restaurar ${user.full_name}`}
+                              className="text-emerald-600 hover:text-emerald-700"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          )}
                           {canDeleteUsers && (
                             <Button
                               variant="ghost"
@@ -807,6 +956,50 @@ export default function UserManagement() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Dar de baja al trabajador</DialogTitle>
+              <DialogDescription>
+                El usuario dejará de aparecer en módulos operativos y quedará en la papelera de reciclaje.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-3">
+              <div className="space-y-2">
+                <Label>Motivo de baja</Label>
+                <Input
+                  value={deactivationReason}
+                  onChange={(event) => setDeactivationReason(event.target.value)}
+                  placeholder="Ej: fin de contrato, renuncia, despido, etc."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha de cancelación de contrato</Label>
+                <Input
+                  type="date"
+                  value={contractCancelledAt}
+                  onChange={(event) => setContractCancelledAt(event.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeactivateDialogOpen(false)} disabled={deactivating}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" onClick={handleDeactivateUser} disabled={deactivating}>
+                {deactivating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  'Confirmar baja'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Create user dialog */}
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>

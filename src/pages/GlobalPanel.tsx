@@ -177,7 +177,8 @@ export default function GlobalPanel() {
         last_connection_at,
         department_id,
         departments(name, is_paused)
-      `);
+      `)
+      .eq('is_active', true);
 
     const { data: schedulesData } = await supabase
       .from('department_schedules')
