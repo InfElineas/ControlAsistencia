@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useGeofenceConfig } from '@/hooks/useGeofenceConfig';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 function formatCoordinate(value: number | null): string {
   if (value === null) return '—';
@@ -23,6 +25,7 @@ export default function GpsDiagnostics() {
   } = useGeolocation();
   const { config, loading: configLoading } = useGeofenceConfig();
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [gpsEnabled, setGpsEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
     getCurrentPosition();
@@ -31,8 +34,14 @@ export default function GpsDiagnostics() {
   useEffect(() => {
     if (latitude !== null && longitude !== null) {
       setLastUpdatedAt(new Date());
+      setGpsEnabled(true);
     }
   }, [latitude, longitude]);
+
+  useEffect(() => {
+    if (!error) return;
+    setGpsEnabled(false);
+  }, [error]);
 
   const geofenceResult = useMemo(() => {
     if (!config) return null;
@@ -49,6 +58,19 @@ export default function GpsDiagnostics() {
       ? `https://www.google.com/maps?q=${latitude},${longitude}`
       : null;
 
+  const requestEnableGps = async () => {
+    const appPlugin = window.Capacitor?.Plugins?.App as { openSettings?: () => Promise<void> } | undefined;
+
+    try {
+      if (appPlugin?.openSettings) {
+        await appPlugin.openSettings();
+      }
+      getCurrentPosition();
+    } catch {
+      getCurrentPosition();
+    }
+  };
+
   return (
     <AppLayout>
       <div className="mx-auto max-w-3xl space-y-4">
@@ -63,6 +85,26 @@ export default function GpsDiagnostics() {
             <p className="text-sm text-muted-foreground">
               Esta pantalla muestra la ubicación que reporta el GPS del dispositivo. Si estás fuera de zona,
               puedes recalcular para mejorar la precisión.
+            </p>
+
+            <div className="flex items-center gap-2 rounded-xl border p-3">
+              <Checkbox
+                id="gps-enabled"
+                checked={Boolean(gpsEnabled)}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    void requestEnableGps();
+                    return;
+                  }
+                  setGpsEnabled(false);
+                }}
+              />
+              <Label htmlFor="gps-enabled" className="text-sm">
+                GPS activado
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Si está desactivado, marca la casilla para intentar abrir los ajustes del dispositivo desde la app.
             </p>
 
             <div className="grid gap-3 sm:grid-cols-2">
