@@ -46,6 +46,7 @@ import { toast } from 'sonner';
 import { useDepartments } from '@/hooks/useDepartments';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
 import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
+import { formatLastConnection } from '@/lib/last-connection';
 
 interface Employee {
   id: string;
@@ -57,6 +58,7 @@ interface Employee {
   department_id: string;
   department_name: string;
   department_paused: boolean;
+  last_connection_at: string | null;
 }
 
 interface ProfileWithDepartment {
@@ -65,6 +67,7 @@ interface ProfileWithDepartment {
   full_name: string;
   email: string;
   phone: string | null;
+  last_connection_at: string | null;
   department_id: string;
   departments: { name: string; is_paused: boolean } | null;
 }
@@ -79,6 +82,7 @@ interface AttendanceSummary {
   employeeName: string;
   email: string;
   phone: string | null;
+  last_connection_at: string | null;
   role: string;
   department: string;
   todayStatus: 'PRESENTE' | 'TARDE' | 'AUSENTE' | 'DESCANSO' | 'NO_LABORABLE' | null;
@@ -170,9 +174,11 @@ export default function GlobalPanel() {
         full_name,
         email,
         phone,
+        last_connection_at,
         department_id,
         departments(name, is_paused)
-      `);
+      `)
+      .eq('is_active', true);
 
     const { data: schedulesData } = await supabase
       .from('department_schedules')
@@ -213,6 +219,7 @@ export default function GlobalPanel() {
           full_name: p.full_name,
           email: p.email,
           phone: p.phone,
+          last_connection_at: p.last_connection_at,
           role: roleMap.get(p.user_id) || 'employee',
           department_id: p.department_id,
           department_name: p.departments?.name || 'Sin departamento',
@@ -279,6 +286,7 @@ export default function GlobalPanel() {
           employeeName: emp.full_name,
           email: emp.email,
           phone: emp.phone,
+          last_connection_at: emp.last_connection_at,
           role: emp.role,
           department: emp.department_name,
           todayStatus: emp.department_paused ? 'NO_LABORABLE' : inMark ? (lateMinutes > 0 ? 'TARDE' : 'PRESENTE') : 'AUSENTE',
@@ -410,15 +418,40 @@ export default function GlobalPanel() {
   );
 
   const departmentHeadcount = useMemo(() => {
-    const map = new Map<string, number>();
-    employees.forEach((employee) => {
-      map.set(employee.department_name, (map.get(employee.department_name) || 0) + 1);
+    type DepartmentSummary = {
+      department: string;
+      total: number;
+      ok: number;
+      late: number;
+      rest: number;
+      absent: number;
+    };
+
+    const map = new Map<string, DepartmentSummary>();
+
+    attendance.forEach((row) => {
+      if (!map.has(row.department)) {
+        map.set(row.department, {
+          department: row.department,
+          total: 0,
+          ok: 0,
+          late: 0,
+          rest: 0,
+          absent: 0,
+        });
+      }
+
+      const current = map.get(row.department)!;
+      current.total += 1;
+
+      if (row.todayStatus === 'PRESENTE') current.ok += 1;
+      else if (row.todayStatus === 'TARDE') current.late += 1;
+      else if (row.todayStatus === 'DESCANSO' || row.todayStatus === 'NO_LABORABLE') current.rest += 1;
+      else if (row.todayStatus === 'AUSENTE') current.absent += 1;
     });
 
-    return Array.from(map.entries())
-      .map(([department, count]) => ({ department, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [employees]);
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [attendance]);
 
   const metrics = {
     total: scopedAttendance.length,
@@ -589,11 +622,31 @@ export default function GlobalPanel() {
             <CardTitle>Trabajadores por departamento</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-3">
               {departmentHeadcount.map((item) => (
-                <div key={item.department} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
-                  <span className="text-muted-foreground">{item.department}</span>
-                  <span className="font-semibold">{item.count}</span>
+                <div key={item.department} className="rounded-xl border p-3 text-sm">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span className="font-medium text-foreground">{item.department}</span>
+                    <span className="text-muted-foreground">{item.total}</span>
+                  </div>
+
+                  <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+                    {item.total > 0 && (
+                      <div className="flex h-full w-full">
+                        <div className="bg-emerald-500" style={{ width: `${(item.ok / item.total) * 100}%` }} />
+                        <div className="bg-amber-500" style={{ width: `${(item.late / item.total) * 100}%` }} />
+                        <div className="bg-sky-500" style={{ width: `${(item.rest / item.total) * 100}%` }} />
+                        <div className="bg-rose-500" style={{ width: `${(item.absent / item.total) * 100}%` }} />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Ok: {item.ok}</span>
+                    <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" /> Tarde: {item.late}</span>
+                    <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-500" /> Descanso: {item.rest}</span>
+                    <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Ausente: {item.absent}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -656,6 +709,7 @@ export default function GlobalPanel() {
                           <p className="font-medium">{row.employeeName}</p>
                           <p className="text-xs text-muted-foreground">{row.email}</p>
                           <p className="text-xs text-muted-foreground">Tel: {row.phone || 'No registrado'} · Rol: {row.role}</p>
+                          <p className="text-xs text-muted-foreground">Última conexión: {formatLastConnection(row.last_connection_at)}</p>
                         </div>
                       </TableCell>
                       <TableCell>{row.department}</TableCell>
