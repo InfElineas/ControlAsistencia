@@ -14,8 +14,6 @@ import {
   TriangleAlert,
   Bell,
   LogOut,
-  Menu,
-  X,
   ChevronDown,
   FolderKanban,
   Briefcase,
