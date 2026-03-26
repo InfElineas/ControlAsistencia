@@ -17,7 +17,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export function EmployeeMarkPage() {
   const { config, loading: configLoading } = useGeofenceConfig();
   const { schedule, isWithinCheckinWindow, loading: scheduleLoading } = useDepartmentSchedule();
-  const { latitude, longitude, accuracy, error: geoError, loading: geoLoading, getCurrentPosition, checkGeofence } = useGeolocation();
+  const {
+    latitude,
+    longitude,
+    accuracy,
+    error: geoError,
+    errorKind,
+    loading: geoLoading,
+    getCurrentPosition,
+    requestLocationAccess,
+    openLocationSettings,
+    checkGeofence,
+  } = useGeolocation();
   const { todayMarks, canMarkIn, canMarkOut, loading, markAttendance } = useAttendance();
   const { locations, activeLocationId, setActiveLocation } = useWorkLocations();
   const [marking, setMarking] = useState(false);
@@ -33,7 +44,7 @@ export function EmployeeMarkPage() {
   }, [getCurrentPosition]);
 
   const geofence = useMemo(() => {
-    if (!config || !latitude || !longitude) return null;
+    if (!config || latitude === null || longitude === null) return null;
     return checkGeofence({
       centerLat: config.center_lat,
       centerLng: config.center_lng,
@@ -118,7 +129,9 @@ export function EmployeeMarkPage() {
           <div className="flex flex-wrap gap-2">
             {!geoError && geofence?.isInside && <StatusPill tone="ok">Dentro ✅</StatusPill>}
             {!geoError && geofence && !geofence.isInside && <StatusPill tone="error">Fuera ❌</StatusPill>}
-            {geoError && <StatusPill tone="warning">GPS apagado ⚠️</StatusPill>}
+            {geoError && errorKind === 'permission_denied' && <StatusPill tone="warning">Permiso GPS denegado ⚠️</StatusPill>}
+            {geoError && errorKind === 'gps_disabled' && <StatusPill tone="warning">GPS apagado ⚠️</StatusPill>}
+            {geoError && errorKind !== 'permission_denied' && errorKind !== 'gps_disabled' && <StatusPill tone="warning">Error de ubicación ⚠️</StatusPill>}
             {checkinState.allowed ? (
               <StatusPill tone="ok">A tiempo ✅</StatusPill>
             ) : (
@@ -132,7 +145,31 @@ export function EmployeeMarkPage() {
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="secondary" size="sm"><Link to="/incidents">Crear incidencia</Link></Button>
-        {!geoError && geofence && !geofence.isInside && (
+        {geoError && errorKind === 'permission_denied' && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void requestLocationAccess().then(() => getCurrentPosition());
+            }}
+            disabled={geoLoading}
+          >
+            Permitir ubicación
+          </Button>
+        )}
+        {geoError && errorKind === 'gps_disabled' && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void openLocationSettings().finally(() => getCurrentPosition());
+            }}
+            disabled={geoLoading}
+          >
+            Abrir ajustes GPS
+          </Button>
+        )}
+        {(!geoError || errorKind === 'unknown' || errorKind === 'timeout' || errorKind === 'position_unavailable') && !geofence?.isInside && (
           <Button variant="secondary" size="sm" onClick={getCurrentPosition} disabled={geoLoading}>
             {geoLoading ? 'Recalculando...' : 'Recalcular'}
           </Button>

@@ -19,8 +19,11 @@ export default function GpsDiagnostics() {
     longitude,
     accuracy,
     error,
+    errorKind,
     loading,
     getCurrentPosition,
+    requestLocationAccess,
+    openLocationSettings,
     checkGeofence,
   } = useGeolocation();
   const { config, loading: configLoading } = useGeofenceConfig();
@@ -59,15 +62,17 @@ export default function GpsDiagnostics() {
       : null;
 
   const requestEnableGps = async () => {
-    const appPlugin = window.Capacitor?.Plugins?.App as { openSettings?: () => Promise<void> } | undefined;
+    if (errorKind === 'permission_denied') {
+      await requestLocationAccess();
+      await getCurrentPosition();
+      return;
+    }
 
     try {
-      if (appPlugin?.openSettings) {
-        await appPlugin.openSettings();
-      }
-      getCurrentPosition();
+      await openLocationSettings();
+      await getCurrentPosition();
     } catch {
-      getCurrentPosition();
+      await getCurrentPosition();
     }
   };
 

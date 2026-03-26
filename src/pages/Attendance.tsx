@@ -145,7 +145,7 @@ export default function Attendance() {
 
   // Check geofence when location updates
   useEffect(() => {
-    if (config && latitude && longitude) {
+    if (config && latitude !== null && longitude !== null) {
       const result = checkGeofence({
         centerLat: config.center_lat,
         centerLng: config.center_lng,

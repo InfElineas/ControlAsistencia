@@ -15,6 +15,17 @@ declare global {
               accuracy: number;
             };
           }>;
+          checkPermissions?: () => Promise<{
+            location?: 'granted' | 'denied' | 'prompt';
+            coarseLocation?: 'granted' | 'denied' | 'prompt';
+          }>;
+          requestPermissions?: () => Promise<{
+            location?: 'granted' | 'denied' | 'prompt';
+            coarseLocation?: 'granted' | 'denied' | 'prompt';
+          }>;
+        };
+        App?: {
+          openSettings?: () => Promise<void>;
         };
       };
     };
