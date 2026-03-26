@@ -203,22 +203,22 @@ export default function Index() {
 
   return (
     <AppLayout>
-      <div className="max-w-6xl mx-auto space-y-6 animate-fade-in">
+      <div className="max-w-6xl mx-auto space-y-4 animate-fade-in">
         <Card className="overflow-hidden border-0 shadow-sm" style={{ background: 'var(--gradient-hero)' }}>
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="text-white">
-              <p className="text-white/80">{getGreeting(today)}</p>
-              <h1 className="text-2xl font-bold mt-1">{profile?.full_name}</h1>
-              <p className="text-white/70 text-sm mt-1 capitalize">{role?.replace('_', ' ')} · modo {uiMode}</p>
+              <p className="text-white/80 text-sm">{getGreeting(today)}</p>
+              <h1 className="text-xl font-bold mt-1">{profile?.full_name}</h1>
+              <p className="text-white/70 text-xs mt-1 capitalize">{role?.replace('_', ' ')} · modo {uiMode}</p>
             </div>
-            <div className="mt-4 flex items-center gap-2 text-white/80 text-sm">
+            <div className="mt-3 flex items-center gap-2 text-white/80 text-xs">
               <Calendar className="h-4 w-4" />
               <span>{format(today, "EEEE, d 'de' MMMM yyyy", { locale: es })}</span>
             </div>
           </CardContent>
         </Card>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">Estado de hoy</CardTitle>
@@ -241,7 +241,7 @@ export default function Index() {
             <CardContent className="flex items-center gap-3">
               <Timer className="h-5 w-5 text-primary" />
               <div>
-                <p className="text-2xl font-bold leading-none">{todayMarks.length}</p>
+                <p className="text-xl font-bold leading-none">{todayMarks.length}</p>
                 <p className="text-xs text-muted-foreground">registros</p>
               </div>
             </CardContent>
@@ -252,7 +252,7 @@ export default function Index() {
               <CardTitle className="text-sm text-muted-foreground">Primera entrada</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-xl font-semibold">{inMarks[0] ? format(new Date(inMarks[0].timestamp), 'HH:mm') : '--:--'}</p>
+              <p className="text-lg font-semibold">{inMarks[0] ? format(new Date(inMarks[0].timestamp), 'HH:mm') : '--:--'}</p>
             </CardContent>
           </Card>
 
@@ -263,7 +263,7 @@ export default function Index() {
             <CardContent className="flex items-center gap-3">
               <Bell className="h-5 w-5 text-primary" />
               <div>
-                <p className="text-2xl font-bold leading-none">{unreadCount}</p>
+                <p className="text-xl font-bold leading-none">{unreadCount}</p>
                 <p className="text-xs text-muted-foreground">sin leer</p>
               </div>
             </CardContent>
@@ -295,18 +295,18 @@ export default function Index() {
           <CardHeader>
             <CardTitle>Resumen del día</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl bg-secondary p-4">
+          <CardContent className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-secondary p-3">
               <p className="text-xs text-muted-foreground">Última salida</p>
-              <p className="text-2xl font-bold">{outMarks[0] ? format(new Date(outMarks[0].timestamp), 'HH:mm') : '--:--'}</p>
+              <p className="text-lg font-bold">{outMarks[0] ? format(new Date(outMarks[0].timestamp), 'HH:mm') : '--:--'}</p>
             </div>
-            <div className="rounded-xl bg-secondary p-4">
+            <div className="rounded-xl bg-secondary p-3">
               <p className="text-xs text-muted-foreground">Horario de descanso</p>
-              <p className="text-2xl font-bold">{isRest ? 'Sí' : 'No'}</p>
+              <p className="text-lg font-bold">{isRest ? 'Sí' : 'No'}</p>
             </div>
-            <div className="rounded-xl bg-secondary p-4">
+            <div className="rounded-xl bg-secondary p-3">
               <p className="text-xs text-muted-foreground">Incidencias pendientes</p>
-              <p className="text-2xl font-bold">{isGlobalManager ? adminStats?.pendingIncidents ?? 0 : 'Revisar en Incidencias'}</p>
+              <p className="text-lg font-bold">{isGlobalManager ? adminStats?.pendingIncidents ?? 0 : 'Ver módulo'}</p>
             </div>
           </CardContent>
         </Card>
@@ -323,22 +323,22 @@ export default function Index() {
                   Cargando métricas...
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <div className="rounded-xl bg-secondary p-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-xl bg-secondary p-3">
                     <p className="text-xs text-muted-foreground">Trabajadores</p>
-                    <p className="text-2xl font-bold">{adminStats?.employees ?? 0}</p>
+                    <p className="text-lg font-bold">{adminStats?.employees ?? 0}</p>
                   </div>
-                  <div className="rounded-xl bg-secondary p-4">
+                  <div className="rounded-xl bg-secondary p-3">
                     <p className="text-xs text-muted-foreground">Departamentos</p>
-                    <p className="text-2xl font-bold">{adminStats?.departments ?? 0}</p>
+                    <p className="text-lg font-bold">{adminStats?.departments ?? 0}</p>
                   </div>
-                  <div className="rounded-xl bg-secondary p-4">
+                  <div className="rounded-xl bg-secondary p-3">
                     <p className="text-xs text-muted-foreground">Marcajes hoy</p>
-                    <p className="text-2xl font-bold">{adminStats?.todayMarks ?? 0}</p>
+                    <p className="text-lg font-bold">{adminStats?.todayMarks ?? 0}</p>
                   </div>
-                  <div className="rounded-xl bg-secondary p-4">
+                  <div className="rounded-xl bg-secondary p-3">
                     <p className="text-xs text-muted-foreground">Incidencias pendientes</p>
-                    <p className="text-2xl font-bold">{adminStats?.pendingIncidents ?? 0}</p>
+                    <p className="text-lg font-bold">{adminStats?.pendingIncidents ?? 0}</p>
                   </div>
                 </div>
               )}

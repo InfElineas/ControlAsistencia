@@ -151,7 +151,7 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased text-[0.94rem];
     font-feature-settings: "rlig" 1, "calt" 1;
     background-image:
       radial-gradient(circle at 0% 0%, hsl(var(--primary) / 0.04), transparent 35%),
@@ -161,19 +161,19 @@
 
   /* Typography scale */
   h1 {
-    @apply text-3xl font-bold tracking-tight md:text-4xl;
+    @apply text-2xl font-bold tracking-tight md:text-3xl;
   }
 
   h2 {
-    @apply text-2xl font-semibold tracking-tight;
+    @apply text-xl font-semibold tracking-tight;
   }
 
   h3 {
-    @apply text-xl font-semibold;
+    @apply text-lg font-semibold;
   }
 
   h4 {
-    @apply text-lg font-medium;
+    @apply text-base font-medium;
   }
 }
 
