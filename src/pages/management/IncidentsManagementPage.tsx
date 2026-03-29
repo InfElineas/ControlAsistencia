@@ -26,6 +26,7 @@ import { useNotifications } from '@/contexts/NotificationsContext';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
 import { AlertTriangle, Check, Clock3, MoreHorizontal, RotateCw, UserRound, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatLastConnection } from '@/lib/last-connection';
 
 interface IncidentRow {
   id: string;
@@ -43,6 +44,7 @@ interface ProfileRow {
   full_name: string;
   email: string;
   department_id: string;
+  last_connection_at: string | null;
   departments: { name: string } | null;
 }
 
@@ -67,7 +69,8 @@ export function IncidentsManagementPage() {
     queryFn: async () => {
       let query = supabase
         .from('profiles')
-        .select('user_id, full_name, email, department_id, departments(name)')
+        .select('user_id, full_name, email, department_id, last_connection_at, departments(name)')
+        .eq('is_active', true)
         .order('full_name', { ascending: true });
 
       if (role === 'department_head') {
@@ -114,7 +117,7 @@ export function IncidentsManagementPage() {
       if (uniqueUsers.length > 0) {
         const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
-          .select('user_id, full_name, email, department_id, departments(name)')
+          .select('user_id, full_name, email, department_id, last_connection_at, departments(name)')
           .in('user_id', uniqueUsers);
 
         if (profilesError) throw profilesError;
@@ -358,6 +361,9 @@ export function IncidentsManagementPage() {
                         <p className="text-sm text-muted-foreground">
                           <UserRound className="mr-1 inline h-4 w-4" />
                           {item.employee?.full_name || 'Empleado'} · {item.employee?.email || 'sin email'} · {item.employee?.departments?.name || 'Sin departamento'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Última conexión: {formatLastConnection(item.employee?.last_connection_at)}
                         </p>
                         <p className="text-sm text-muted-foreground">
                           <Clock3 className="mr-1 inline h-4 w-4" />

@@ -32,9 +32,78 @@ interface NotificationsContextType {
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const syncRestScheduleReminder = useCallback(async (userId: string) => {
+    if (role !== 'employee' && role !== 'department_head') {
+      return;
+    }
+
+    const now = new Date();
+    const day = now.getDay();
+    const mondayDistance = day === 0 ? 6 : day - 1;
+    const weekStartDate = new Date(now);
+    weekStartDate.setDate(now.getDate() - mondayDistance);
+    const weekEndDate = new Date(weekStartDate);
+    weekEndDate.setDate(weekStartDate.getDate() + 6);
+
+    const weekStart = weekStartDate.toISOString().slice(0, 10);
+    const weekEnd = weekEndDate.toISOString().slice(0, 10);
+
+    const reminderTitle = 'Configura tus días de descanso';
+    const reminderLink = '/rest-schedule';
+
+    const { data: schedules } = await supabase
+      .from('user_rest_schedule')
+      .select('id')
+      .eq('user_id', userId)
+      .gte('effective_from', weekStart)
+      .lte('effective_from', weekEnd)
+      .limit(1);
+
+    const hasSchedule = Boolean(schedules && schedules.length > 0);
+
+    const { data: existingReminder } = await supabase
+      .from('notifications')
+      .select('id, is_read')
+      .eq('user_id', userId)
+      .eq('title', reminderTitle)
+      .eq('link', reminderLink)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!hasSchedule) {
+      if (!existingReminder) {
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          title: reminderTitle,
+          message: 'Debes configurar tus días de descanso de esta semana para evitar bloqueos o incidencias de marcaje.',
+          type: 'warning',
+          link: reminderLink,
+          is_read: false,
+        });
+        return;
+      }
+
+      if (existingReminder.is_read) {
+        await supabase
+          .from('notifications')
+          .update({ is_read: false, read_at: null })
+          .eq('id', existingReminder.id);
+      }
+      return;
+    }
+
+    if (existingReminder && !existingReminder.is_read) {
+      await supabase
+        .from('notifications')
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq('id', existingReminder.id);
+    }
+  }, [role]);
 
   const refetch = useCallback(async () => {
     if (!user) {
@@ -44,6 +113,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }
 
     setLoading(true);
+    await syncRestScheduleReminder(user.id);
+
     const { data } = await supabase
       .from('notifications')
       .select('id, title, message, type, link, is_read, created_at, read_at')
@@ -53,7 +124,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
     setNotifications((data || []) as AppNotification[]);
     setLoading(false);
-  }, [user]);
+  }, [syncRestScheduleReminder, user]);
 
   useEffect(() => {
     refetch();

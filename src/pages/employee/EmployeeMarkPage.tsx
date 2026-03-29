@@ -17,7 +17,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 export function EmployeeMarkPage() {
   const { config, loading: configLoading } = useGeofenceConfig();
   const { schedule, isWithinCheckinWindow, loading: scheduleLoading } = useDepartmentSchedule();
-  const { latitude, longitude, accuracy, error: geoError, loading: geoLoading, getCurrentPosition, checkGeofence } = useGeolocation();
+  const {
+    latitude,
+    longitude,
+    accuracy,
+    error: geoError,
+    errorKind,
+    loading: geoLoading,
+    getCurrentPosition,
+    requestLocationAccess,
+    openAppSettings,
+    openLocationSettings,
+    checkGeofence,
+  } = useGeolocation();
   const { todayMarks, canMarkIn, canMarkOut, loading, markAttendance } = useAttendance();
   const { locations, activeLocationId, setActiveLocation } = useWorkLocations();
   const [marking, setMarking] = useState(false);
@@ -33,7 +45,7 @@ export function EmployeeMarkPage() {
   }, [getCurrentPosition]);
 
   const geofence = useMemo(() => {
-    if (!config || !latitude || !longitude) return null;
+    if (!config || latitude === null || longitude === null) return null;
     return checkGeofence({
       centerLat: config.center_lat,
       centerLng: config.center_lng,
@@ -118,7 +130,11 @@ export function EmployeeMarkPage() {
           <div className="flex flex-wrap gap-2">
             {!geoError && geofence?.isInside && <StatusPill tone="ok">Dentro ✅</StatusPill>}
             {!geoError && geofence && !geofence.isInside && <StatusPill tone="error">Fuera ❌</StatusPill>}
-            {geoError && <StatusPill tone="warning">GPS apagado ⚠️</StatusPill>}
+            {geoError && errorKind === 'permission_denied' && <StatusPill tone="warning">Permiso denegado ⚠️</StatusPill>}
+            {geoError && errorKind === 'permission_blocked' && <StatusPill tone="warning">Permiso bloqueado ⚠️</StatusPill>}
+            {geoError && errorKind === 'gps_disabled' && <StatusPill tone="warning">GPS apagado ⚠️</StatusPill>}
+            {geoError && errorKind === 'background_not_granted' && <StatusPill tone="warning">Falta permiso 2º plano ⚠️</StatusPill>}
+            {geoError && errorKind !== 'permission_denied' && errorKind !== 'permission_blocked' && errorKind !== 'gps_disabled' && errorKind !== 'background_not_granted' && <StatusPill tone="warning">Error de ubicación ⚠️</StatusPill>}
             {checkinState.allowed ? (
               <StatusPill tone="ok">A tiempo ✅</StatusPill>
             ) : (
@@ -132,6 +148,47 @@ export function EmployeeMarkPage() {
 
       <div className="flex flex-wrap gap-2">
         <Button asChild variant="secondary" size="sm"><Link to="/incidents">Crear incidencia</Link></Button>
+        {geoError && errorKind === 'permission_denied' && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void requestLocationAccess().then(() => getCurrentPosition());
+            }}
+            disabled={geoLoading}
+          >
+            Permitir ubicación
+          </Button>
+        )}
+        {geoError && errorKind === 'gps_disabled' && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void openLocationSettings().finally(() => getCurrentPosition());
+            }}
+            disabled={geoLoading}
+          >
+            Abrir ajustes GPS
+          </Button>
+        )}
+        {geoError && errorKind === 'permission_blocked' && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              void openAppSettings().finally(() => getCurrentPosition());
+            }}
+            disabled={geoLoading}
+          >
+            Abrir ajustes app
+          </Button>
+        )}
+        {(!geoError || errorKind === 'unknown_error' || errorKind === 'timeout' || errorKind === 'location_unavailable') && !geofence?.isInside && (
+          <Button variant="secondary" size="sm" onClick={getCurrentPosition} disabled={geoLoading}>
+            {geoLoading ? 'Recalculando...' : 'Recalcular'}
+          </Button>
+        )}
         <Button asChild variant="secondary" size="sm"><Link to="/rest-schedule">Ver horario</Link></Button>
         <Button asChild variant="secondary" size="sm"><Link to="/history">Ver mis marcajes</Link></Button>
       </div>
