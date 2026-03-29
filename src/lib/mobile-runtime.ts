@@ -42,6 +42,10 @@ declare global {
           startTracking?: () => Promise<void>;
           stopTracking?: () => Promise<void>;
         };
+        LocalNotifications?: {
+          checkPermissions?: () => Promise<{ display?: 'granted' | 'denied' | 'prompt' }>;
+          requestPermissions?: () => Promise<{ display?: 'granted' | 'denied' | 'prompt' }>;
+        };
       };
     };
   }

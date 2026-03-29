@@ -3,7 +3,8 @@ import { Navigate } from 'react-router-dom';
 import { useAuth, AppRole } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { isNativeRuntime } from '@/lib/mobile-runtime';
-import { requestForegroundLocationPermission } from '@/lib/location-service';
+import { requestBackgroundLocationPermission, requestForegroundLocationPermission } from '@/lib/location-service';
+import { requestNotificationPermission } from '@/lib/notification-permissions';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -20,11 +21,20 @@ export function ProtectedRoute({ children, allowedRoles, excludedRoles }: Protec
     const permissionPromptKey = `location-permission-prompted:${user.id}`;
     if (window.sessionStorage.getItem(permissionPromptKey) === '1') return;
 
-    void requestForegroundLocationPermission().then((result) => {
-      if (result.prompted) {
+    const requestStartupPermissions = async () => {
+      const foregroundResult = await requestForegroundLocationPermission();
+      if (foregroundResult.state === 'granted') {
+        await requestBackgroundLocationPermission();
+      }
+
+      await requestNotificationPermission();
+
+      if (foregroundResult.prompted) {
         window.sessionStorage.setItem(permissionPromptKey, '1');
       }
-    });
+    };
+
+    void requestStartupPermissions();
   }, [user]);
 
   if (loading) {

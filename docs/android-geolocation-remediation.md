@@ -30,6 +30,7 @@
 5. Para auto-salida geofence: `requestBackgroundLocationPermission()`
 6. Si background no está concedido: `background_not_granted`.
 7. Si arquitectura no soporta tracking real en background: `background_tracking_unavailable`.
+8. Al abrir app en sesión autenticada nativa: se solicita también permiso de notificaciones locales para avisos de entrada/salida y eventos en segundo plano.
 
 ## Limitación honesta de background tracking
 
