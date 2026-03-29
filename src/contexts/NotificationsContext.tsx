@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 export interface AppNotification {
   id: string;
@@ -137,6 +138,47 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     }, 30_000);
 
     return () => window.clearInterval(interval);
+  }, [refetch, user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel(`notifications-user-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          void refetch();
+
+          if (payload.eventType === 'INSERT') {
+            const newNotification = payload.new as {
+              title?: string;
+              message?: string;
+            };
+
+            toast.info(newNotification.title || 'Nueva notificación', {
+              description: newNotification.message || undefined,
+            });
+
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              new Notification(newNotification.title || 'Nueva notificación', {
+                body: newNotification.message || '',
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [refetch, user]);
 
   const markAsRead = useCallback(async (id: string) => {

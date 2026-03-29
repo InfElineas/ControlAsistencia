@@ -1,12 +1,29 @@
-import { useState, useEffect, useCallback } from 'react';
-import { isNativeRuntime } from '@/lib/mobile-runtime';
+import { useState, useCallback } from 'react';
+import {
+  checkLocationPermissions,
+  getCurrentDevicePosition,
+  openAppSettings,
+  openLocationSettings,
+  requestBackgroundLocationPermission,
+  requestForegroundLocationPermission,
+  startBackgroundLocationTracking,
+  stopBackgroundLocationTracking,
+  type LocationErrorStatus,
+  type LocationPermissionSnapshot,
+  type LocationPoint,
+} from '@/lib/location-service';
+
+export type GeolocationErrorKind = LocationErrorStatus;
 
 interface GeolocationState {
   latitude: number | null;
   longitude: number | null;
   accuracy: number | null;
   error: string | null;
+  errorKind: GeolocationErrorKind;
   loading: boolean;
+  permissions: LocationPermissionSnapshot;
+  backgroundTrackingActive: boolean;
 }
 
 interface GeofenceConfig {
@@ -22,9 +39,8 @@ interface GeofenceResult {
   accuracyOk: boolean;
 }
 
-// Haversine formula to calculate distance between two points
 function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371e3; // Earth's radius in meters
+  const R = 6371e3;
   const φ1 = (lat1 * Math.PI) / 180;
   const φ2 = (lat2 * Math.PI) / 180;
   const Δφ = ((lat2 - lat1) * Math.PI) / 180;
@@ -44,85 +60,143 @@ export function useGeolocation() {
     longitude: null,
     accuracy: null,
     error: null,
+    errorKind: null,
     loading: false,
+    permissions: {
+      foreground: 'unknown',
+      background: 'unknown',
+      native: false,
+    },
+    backgroundTrackingActive: false,
   });
 
-  const getCurrentPosition = useCallback(() => {
-    const nativeGeolocation = window.Capacitor?.Plugins?.Geolocation;
+  const refreshPermissions = useCallback(async () => {
+    const permissions = await checkLocationPermissions();
+    setState((prev) => ({ ...prev, permissions }));
+    return permissions;
+  }, []);
 
-    if (isNativeRuntime() && nativeGeolocation?.getCurrentPosition) {
-      setState(prev => ({ ...prev, loading: true, error: null }));
-      nativeGeolocation
-        .getCurrentPosition({
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        })
-        .then((position) => {
-          setState({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            error: null,
-            loading: false,
-          });
-        })
-        .catch(() => {
-          setState(prev => ({
-            ...prev,
-            error: 'No se pudo obtener ubicación nativa del dispositivo',
-            loading: false,
-          }));
-        });
-      return;
+  const requestLocationAccess = useCallback(async () => {
+    const requestResult = await requestForegroundLocationPermission();
+    const foreground = requestResult.state;
+    const permissions = await checkLocationPermissions();
+
+    setState((prev) => ({
+      ...prev,
+      permissions: {
+        ...permissions,
+        foreground,
+      },
+      error:
+        foreground === 'denied'
+          ? requestResult.blocked
+            ? 'Permiso bloqueado. Debes habilitar ubicación manualmente en ajustes.'
+            : 'Debes permitir acceso a la ubicación para poder marcar.'
+          : prev.error,
+      errorKind: foreground === 'denied' ? (requestResult.blocked ? 'permission_blocked' : 'permission_denied') : prev.errorKind,
+    }));
+
+    return requestResult;
+  }, []);
+
+  const requestBackgroundAccess = useCallback(async () => {
+    const requestResult = await requestBackgroundLocationPermission();
+    const background = requestResult.state;
+    const permissions = await checkLocationPermissions();
+
+    setState((prev) => ({
+      ...prev,
+      permissions: {
+        ...permissions,
+        background,
+      },
+    }));
+
+    return requestResult;
+  }, []);
+
+  const getCurrentPosition = useCallback(async () => {
+    setState((prev) => ({ ...prev, loading: true, error: null, errorKind: null }));
+
+    const permissions = await refreshPermissions();
+    if (permissions.foreground !== 'granted') {
+      const requestResult = await requestLocationAccess();
+      if (requestResult.state !== 'granted') {
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          errorKind: requestResult.blocked ? 'permission_blocked' : 'permission_denied',
+          error: requestResult.blocked
+            ? 'Permiso de ubicación bloqueado. Abre ajustes de la app para habilitarlo.'
+            : 'Debes permitir acceso a la ubicación para poder marcar.',
+        }));
+        return;
+      }
     }
 
-    if (!navigator.geolocation) {
-      setState(prev => ({
+    const positionResult = await getCurrentDevicePosition();
+
+    if (!positionResult.ok) {
+      setState((prev) => ({
         ...prev,
-        error: 'Geolocalización no disponible en este dispositivo',
         loading: false,
+        errorKind: positionResult.status,
+        error: positionResult.message,
       }));
       return;
     }
 
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    const point: LocationPoint = positionResult.position;
+    setState((prev) => ({
+      ...prev,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      accuracy: point.accuracy,
+      loading: false,
+      error: null,
+      errorKind: null,
+    }));
+  }, [refreshPermissions, requestLocationAccess]);
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setState({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          error: null,
-          loading: false,
-        });
-      },
-      (error) => {
-        let errorMessage = 'Error al obtener ubicación';
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = 'Permiso de ubicación denegado. Por favor, habilita la ubicación.';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Ubicación no disponible';
-            break;
-          case error.TIMEOUT:
-            errorMessage = 'Tiempo de espera agotado';
-            break;
-        }
-        setState(prev => ({
-          ...prev,
-          error: errorMessage,
-          loading: false,
-        }));
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0,
-      }
-    );
+  const startBackgroundTracking = useCallback(async () => {
+    const bgRequestResult = await requestBackgroundAccess();
+    if (bgRequestResult.state !== 'granted') {
+      setState((prev) => ({
+        ...prev,
+        errorKind: bgRequestResult.blocked ? 'permission_blocked' : 'background_not_granted',
+        error: bgRequestResult.blocked
+          ? 'Permiso en segundo plano bloqueado. Habilítalo desde ajustes de la app.'
+          : 'Debes habilitar ubicación en segundo plano para la salida automática.',
+        backgroundTrackingActive: false,
+      }));
+      return (bgRequestResult.blocked ? 'permission_blocked' : 'background_not_granted') as const;
+    }
+
+    const trackingStatus = await startBackgroundLocationTracking((point) => {
+      setState((prev) => ({
+        ...prev,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        accuracy: point.accuracy,
+      }));
+    });
+
+    setState((prev) => ({
+      ...prev,
+      backgroundTrackingActive: trackingStatus === null,
+      errorKind: trackingStatus,
+      error:
+        trackingStatus === 'background_tracking_unavailable'
+          ? 'Seguimiento en segundo plano no disponible sin plugin/servicio nativo adicional.'
+          : prev.error,
+    }));
+
+    return trackingStatus;
+  }, [requestBackgroundAccess]);
+
+  const stopBackgroundTracking = useCallback(async () => {
+    await stopBackgroundLocationTracking();
+    setState((prev) => ({ ...prev, backgroundTrackingActive: false }));
   }, []);
 
   const checkGeofence = useCallback(
@@ -131,13 +205,7 @@ export function useGeolocation() {
         return null;
       }
 
-      const distance = calculateDistance(
-        state.latitude,
-        state.longitude,
-        config.centerLat,
-        config.centerLng
-      );
-
+      const distance = calculateDistance(state.latitude, state.longitude, config.centerLat, config.centerLng);
       const isInside = distance <= config.radiusMeters;
       const accuracyOk = state.accuracy !== null && state.accuracy <= config.accuracyThreshold;
 
@@ -153,6 +221,13 @@ export function useGeolocation() {
   return {
     ...state,
     getCurrentPosition,
+    refreshPermissions,
+    requestLocationAccess,
+    requestBackgroundAccess,
+    openAppSettings,
+    openLocationSettings,
+    startBackgroundTracking,
+    stopBackgroundTracking,
     checkGeofence,
   };
 }

@@ -15,6 +15,36 @@ declare global {
               accuracy: number;
             };
           }>;
+          watchPosition?: (
+            options: {
+              enableHighAccuracy?: boolean;
+              timeout?: number;
+              maximumAge?: number;
+            },
+            callback: (position: { coords: { latitude: number; longitude: number; accuracy: number } } | null, error?: unknown) => void
+          ) => Promise<string>;
+          clearWatch?: (options: { id: string }) => Promise<void>;
+          checkPermissions?: () => Promise<{
+            location?: 'granted' | 'denied' | 'prompt';
+            coarseLocation?: 'granted' | 'denied' | 'prompt';
+          }>;
+          requestPermissions?: () => Promise<{
+            location?: 'granted' | 'denied' | 'prompt';
+            coarseLocation?: 'granted' | 'denied' | 'prompt';
+          }>;
+        };
+        App?: {
+          openSettings?: () => Promise<void>;
+        };
+        BackgroundGeolocation?: {
+          checkPermissions?: () => Promise<{ location?: 'granted' | 'denied' | 'prompt' }>;
+          requestPermissions?: () => Promise<{ location?: 'granted' | 'denied' | 'prompt' }>;
+          startTracking?: () => Promise<void>;
+          stopTracking?: () => Promise<void>;
+        };
+        LocalNotifications?: {
+          checkPermissions?: () => Promise<{ display?: 'granted' | 'denied' | 'prompt' }>;
+          requestPermissions?: () => Promise<{ display?: 'granted' | 'denied' | 'prompt' }>;
         };
       };
     };

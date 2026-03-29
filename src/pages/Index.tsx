@@ -25,6 +25,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 function getMarkBadgeClass(markType: 'IN' | 'OUT'): string {
   return markType === 'IN' ? 'bg-success' : 'bg-primary';
@@ -46,6 +47,10 @@ interface AdminDashboardStats {
   departments: number;
   pendingIncidents: number;
   todayMarks: number;
+  presentToday: number;
+  absentToday: number;
+  completionRate: number;
+  marksByDay: Array<{ day: string; marks: number }>;
 }
 
 export default function Index() {
@@ -124,11 +129,49 @@ export default function Index() {
           .gte('timestamp', todayStart.toISOString()),
       ]);
 
+      const [{ data: inMarksToday }, { data: marksLastWeek }] = await Promise.all([
+        supabase
+          .from('attendance_marks')
+          .select('user_id')
+          .eq('mark_type', 'IN')
+          .gte('timestamp', todayStart.toISOString()),
+        supabase
+          .from('attendance_marks')
+          .select('timestamp')
+          .gte('timestamp', new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString()),
+      ]);
+
+      const uniquePresentUsers = new Set((inMarksToday || []).map((item) => item.user_id));
+      const totalEmployees = employees ?? 0;
+      const presentToday = uniquePresentUsers.size;
+      const absentToday = Math.max(0, totalEmployees - presentToday);
+      const completionRate = totalEmployees > 0 ? Math.round((presentToday / totalEmployees) * 100) : 0;
+
+      const marksByDayMap = new Map<string, number>();
+      for (let i = 6; i >= 0; i -= 1) {
+        const date = new Date();
+        date.setHours(0, 0, 0, 0);
+        date.setDate(date.getDate() - i);
+        const key = format(date, 'dd/MM');
+        marksByDayMap.set(key, 0);
+      }
+
+      (marksLastWeek || []).forEach((mark) => {
+        const key = format(new Date(mark.timestamp), 'dd/MM');
+        if (marksByDayMap.has(key)) {
+          marksByDayMap.set(key, (marksByDayMap.get(key) ?? 0) + 1);
+        }
+      });
+
       setAdminStats({
-        employees: employees ?? 0,
+        employees: totalEmployees,
         departments: departments ?? 0,
         pendingIncidents: incidentsResp.count ?? 0,
         todayMarks: marksResp.count ?? 0,
+        presentToday,
+        absentToday,
+        completionRate,
+        marksByDay: Array.from(marksByDayMap.entries()).map(([day, marks]) => ({ day, marks })),
       });
 
       setLoadingAdminStats(false);
@@ -340,7 +383,45 @@ export default function Index() {
                     <p className="text-xs text-muted-foreground">Incidencias pendientes</p>
                     <p className="text-lg font-bold">{adminStats?.pendingIncidents ?? 0}</p>
                   </div>
+                  <div className="rounded-xl bg-secondary p-3">
+                    <p className="text-xs text-muted-foreground">Presentes hoy</p>
+                    <p className="text-lg font-bold text-success">{adminStats?.presentToday ?? 0}</p>
+                  </div>
+                  <div className="rounded-xl bg-secondary p-3">
+                    <p className="text-xs text-muted-foreground">Ausentes hoy</p>
+                    <p className="text-lg font-bold text-destructive">{adminStats?.absentToday ?? 0}</p>
+                  </div>
+                  <div className="rounded-xl bg-secondary p-3">
+                    <p className="text-xs text-muted-foreground">Cobertura</p>
+                    <p className="text-lg font-bold">{adminStats?.completionRate ?? 0}%</p>
+                  </div>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {isGlobalManager && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Tendencia de marcajes (7 días)</CardTitle>
+            </CardHeader>
+            <CardContent className="h-72">
+              {loadingAdminStats ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Cargando gráfico...
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={adminStats?.marksByDay ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="day" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="marks" fill="#1D4ED8" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
