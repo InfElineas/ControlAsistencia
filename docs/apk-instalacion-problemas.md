@@ -27,6 +27,18 @@ Revisa `android/app/build.gradle` (en proyecto Android completo) y ajusta según
 
 - Si publicas APK universal, debe incluir ABI del dispositivo.
 - Si cambiaste `applicationId/package`, puede parecer “otra app” o no actualizar.
+- Si el `AndroidManifest.xml` no tiene actividad launcher (`MAIN` + `LAUNCHER`), la app se instala pero no aparece para abrir.
+
+Ejemplo mínimo que **sí** debe existir en el manifest:
+
+```xml
+<activity android:name=".MainActivity" android:exported="true">
+  <intent-filter>
+    <action android:name="android.intent.action.MAIN" />
+    <category android:name="android.intent.category.LAUNCHER" />
+  </intent-filter>
+</activity>
+```
 
 ## 5) Inspecciona el error real con ADB
 
