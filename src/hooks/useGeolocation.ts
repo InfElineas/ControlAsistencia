@@ -77,7 +77,8 @@ export function useGeolocation() {
   }, []);
 
   const requestLocationAccess = useCallback(async () => {
-    const foreground = await requestForegroundLocationPermission();
+    const requestResult = await requestForegroundLocationPermission();
+    const foreground = requestResult.state;
     const permissions = await checkLocationPermissions();
 
     setState((prev) => ({
@@ -86,15 +87,21 @@ export function useGeolocation() {
         ...permissions,
         foreground,
       },
-      error: foreground === 'denied' ? 'Debes permitir acceso a la ubicación para poder marcar.' : prev.error,
-      errorKind: foreground === 'denied' ? 'permission_denied' : prev.errorKind,
+      error:
+        foreground === 'denied'
+          ? requestResult.blocked
+            ? 'Permiso bloqueado. Debes habilitar ubicación manualmente en ajustes.'
+            : 'Debes permitir acceso a la ubicación para poder marcar.'
+          : prev.error,
+      errorKind: foreground === 'denied' ? (requestResult.blocked ? 'permission_blocked' : 'permission_denied') : prev.errorKind,
     }));
 
-    return foreground;
+    return requestResult;
   }, []);
 
   const requestBackgroundAccess = useCallback(async () => {
-    const background = await requestBackgroundLocationPermission();
+    const requestResult = await requestBackgroundLocationPermission();
+    const background = requestResult.state;
     const permissions = await checkLocationPermissions();
 
     setState((prev) => ({
@@ -105,31 +112,23 @@ export function useGeolocation() {
       },
     }));
 
-    return background;
+    return requestResult;
   }, []);
 
   const getCurrentPosition = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true, error: null, errorKind: null }));
 
     const permissions = await refreshPermissions();
-    if (permissions.foreground === 'denied') {
-      setState((prev) => ({
-        ...prev,
-        loading: false,
-        errorKind: 'permission_blocked',
-        error: 'Permiso de ubicación bloqueado. Abre ajustes de la app para habilitarlo.',
-      }));
-      return;
-    }
-
     if (permissions.foreground !== 'granted') {
-      const granted = await requestLocationAccess();
-      if (granted !== 'granted') {
+      const requestResult = await requestLocationAccess();
+      if (requestResult.state !== 'granted') {
         setState((prev) => ({
           ...prev,
           loading: false,
-          errorKind: 'permission_denied',
-          error: 'Debes permitir acceso a la ubicación para poder marcar.',
+          errorKind: requestResult.blocked ? 'permission_blocked' : 'permission_denied',
+          error: requestResult.blocked
+            ? 'Permiso de ubicación bloqueado. Abre ajustes de la app para habilitarlo.'
+            : 'Debes permitir acceso a la ubicación para poder marcar.',
         }));
         return;
       }
@@ -160,15 +159,17 @@ export function useGeolocation() {
   }, [refreshPermissions, requestLocationAccess]);
 
   const startBackgroundTracking = useCallback(async () => {
-    const bgPermission = await requestBackgroundAccess();
-    if (bgPermission !== 'granted') {
+    const bgRequestResult = await requestBackgroundAccess();
+    if (bgRequestResult.state !== 'granted') {
       setState((prev) => ({
         ...prev,
-        errorKind: 'background_not_granted',
-        error: 'Debes habilitar ubicación en segundo plano para la salida automática.',
+        errorKind: bgRequestResult.blocked ? 'permission_blocked' : 'background_not_granted',
+        error: bgRequestResult.blocked
+          ? 'Permiso en segundo plano bloqueado. Habilítalo desde ajustes de la app.'
+          : 'Debes habilitar ubicación en segundo plano para la salida automática.',
         backgroundTrackingActive: false,
       }));
-      return 'background_not_granted' as const;
+      return (bgRequestResult.blocked ? 'permission_blocked' : 'background_not_granted') as const;
     }
 
     const trackingStatus = await startBackgroundLocationTracking((point) => {

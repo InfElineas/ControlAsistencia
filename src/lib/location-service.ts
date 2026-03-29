@@ -107,7 +107,10 @@ export async function checkLocationPermissions(): Promise<LocationPermissionSnap
   };
 }
 
-export async function requestForegroundLocationPermission(): Promise<LocationPermissionState> {
+export async function requestForegroundLocationPermission(): Promise<{
+  state: LocationPermissionState;
+  blocked: boolean;
+}> {
   const native = isNativeRuntime();
 
   if (native && window.Capacitor?.Plugins?.Geolocation) {
@@ -118,25 +121,31 @@ export async function requestForegroundLocationPermission(): Promise<LocationPer
     const requested = geoPlugin.requestPermissions ? await geoPlugin.requestPermissions() : current;
     const requestedState = normalizePermission(requested?.location ?? requested?.coarseLocation);
 
-    if (requestedState === 'denied' && currentState === 'denied') {
-      return 'denied';
-    }
-
-    return requestedState;
+    return {
+      state: requestedState,
+      blocked: requestedState === 'denied' && currentState === 'denied',
+    };
   }
 
-  if (!navigator.geolocation) return 'unknown';
-  if (!navigator.permissions?.query) return 'prompt';
+  if (!navigator.geolocation) return { state: 'unknown', blocked: false };
+  if (!navigator.permissions?.query) return { state: 'prompt', blocked: false };
   const state = await navigator.permissions.query({ name: 'geolocation' });
-  return normalizePermission(state.state);
+  const normalized = normalizePermission(state.state);
+  return {
+    state: normalized,
+    blocked: normalized === 'denied',
+  };
 }
 
-export async function requestBackgroundLocationPermission(): Promise<LocationPermissionState> {
+export async function requestBackgroundLocationPermission(): Promise<{
+  state: LocationPermissionState;
+  blocked: boolean;
+}> {
   const native = isNativeRuntime();
   const bgPlugin = window.Capacitor?.Plugins?.BackgroundGeolocation;
 
   if (!native || !bgPlugin) {
-    return 'unknown';
+    return { state: 'unknown', blocked: false };
   }
 
   const current = bgPlugin.checkPermissions ? await bgPlugin.checkPermissions() : undefined;
@@ -145,11 +154,10 @@ export async function requestBackgroundLocationPermission(): Promise<LocationPer
   const requested = bgPlugin.requestPermissions ? await bgPlugin.requestPermissions() : current;
   const requestedState = normalizePermission(requested?.location);
 
-  if (requestedState === 'denied' && currentState === 'denied') {
-    return 'denied';
-  }
-
-  return requestedState;
+  return {
+    state: requestedState,
+    blocked: requestedState === 'denied' && currentState === 'denied',
+  };
 }
 
 export async function openAppSettings(): Promise<boolean> {
