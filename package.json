@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "mobile:icon": "npx @capacitor/assets generate --android"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
