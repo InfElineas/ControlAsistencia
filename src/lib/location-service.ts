@@ -110,6 +110,7 @@ export async function checkLocationPermissions(): Promise<LocationPermissionSnap
 export async function requestForegroundLocationPermission(): Promise<{
   state: LocationPermissionState;
   blocked: boolean;
+  prompted: boolean;
 }> {
   const native = isNativeRuntime();
 
@@ -124,17 +125,44 @@ export async function requestForegroundLocationPermission(): Promise<{
     return {
       state: requestedState,
       blocked: requestedState === 'denied' && currentState === 'denied',
+      prompted: true,
     };
   }
 
-  if (!navigator.geolocation) return { state: 'unknown', blocked: false };
-  if (!navigator.permissions?.query) return { state: 'prompt', blocked: false };
-  const state = await navigator.permissions.query({ name: 'geolocation' });
-  const normalized = normalizePermission(state.state);
-  return {
-    state: normalized,
-    blocked: normalized === 'denied',
-  };
+  if (!navigator.geolocation) return { state: 'unknown', blocked: false, prompted: false };
+
+  const initialPermissionState = navigator.permissions?.query
+    ? normalizePermission((await navigator.permissions.query({ name: 'geolocation' })).state)
+    : 'unknown';
+
+  const promptResult = await new Promise<{ state: LocationPermissionState; blocked: boolean; prompted: boolean }>((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      () => resolve({ state: 'granted', blocked: false, prompted: true }),
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          resolve({
+            state: 'denied',
+            blocked: initialPermissionState === 'denied',
+            prompted: true,
+          });
+          return;
+        }
+
+        resolve({
+          state: 'granted',
+          blocked: false,
+          prompted: true,
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 0,
+      }
+    );
+  });
+
+  return promptResult;
 }
 
 export async function requestBackgroundLocationPermission(): Promise<{

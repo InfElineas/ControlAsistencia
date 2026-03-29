@@ -20,8 +20,10 @@ export function ProtectedRoute({ children, allowedRoles, excludedRoles }: Protec
     const permissionPromptKey = `location-permission-prompted:${user.id}`;
     if (window.sessionStorage.getItem(permissionPromptKey) === '1') return;
 
-    void requestForegroundLocationPermission().finally(() => {
-      window.sessionStorage.setItem(permissionPromptKey, '1');
+    void requestForegroundLocationPermission().then((result) => {
+      if (result.prompted) {
+        window.sessionStorage.setItem(permissionPromptKey, '1');
+      }
     });
   }, [user]);
 
