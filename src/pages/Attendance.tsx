@@ -53,8 +53,11 @@ export default function Attendance() {
     longitude,
     accuracy,
     error: geoError,
+    errorKind: geoErrorKind,
     loading: geoLoading,
     getCurrentPosition,
+    startBackgroundTracking,
+    stopBackgroundTracking,
     checkGeofence,
   } = useGeolocation();
   const {
@@ -145,7 +148,7 @@ export default function Attendance() {
 
   // Check geofence when location updates
   useEffect(() => {
-    if (config && latitude && longitude) {
+    if (config && latitude !== null && longitude !== null) {
       const result = checkGeofence({
         centerLat: config.center_lat,
         centerLng: config.center_lng,
@@ -357,6 +360,19 @@ export default function Attendance() {
     }
   }, [canMarkOut, geofenceResult?.isInside]);
 
+  useEffect(() => {
+    if (checkoutMode !== 'geofence_exit' || isGlobalManager || isRest || !canMarkOut) {
+      void stopBackgroundTracking();
+      return;
+    }
+
+    void startBackgroundTracking();
+
+    return () => {
+      void stopBackgroundTracking();
+    };
+  }, [canMarkOut, checkoutMode, isGlobalManager, isRest, startBackgroundTracking, stopBackgroundTracking]);
+
   const isLoading = configLoading || gmLoading || scheduleLoading || checkoutConfigLoading;
 
   if (uiMode === 'employee') {
@@ -484,6 +500,25 @@ export default function Attendance() {
             <Clock className="h-5 w-5 text-warning" />
             <p className="text-sm text-warning">
               {checkinCheck.message}
+            </p>
+          </div>
+        )}
+
+        {!isGlobalManager && geoError && (
+          <div className="flex items-center gap-3 p-4 rounded-xl bg-warning/10 border border-warning/20">
+            <AlertCircle className="h-5 w-5 text-warning" />
+            <p className="text-sm text-warning">
+              {geoErrorKind === 'permission_denied' && 'Debes permitir acceso a la ubicación para poder marcar.'}
+              {geoErrorKind === 'permission_blocked' && 'Permiso bloqueado: abre ajustes de la app para habilitar ubicación.'}
+              {geoErrorKind === 'gps_disabled' && 'Activa la ubicación del dispositivo para continuar.'}
+              {geoErrorKind === 'background_not_granted' && 'Habilita ubicación en segundo plano para la salida automática.'}
+              {geoErrorKind === 'background_tracking_unavailable' && 'Seguimiento en segundo plano no disponible sin plugin nativo.'}
+              {geoErrorKind !== 'permission_denied' &&
+                geoErrorKind !== 'permission_blocked' &&
+                geoErrorKind !== 'gps_disabled' &&
+                geoErrorKind !== 'background_not_granted' &&
+                geoErrorKind !== 'background_tracking_unavailable' &&
+                geoError}
             </p>
           </div>
         )}
