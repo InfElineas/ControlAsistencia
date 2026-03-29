@@ -1,7 +1,9 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth, AppRole } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { isNativeRuntime } from '@/lib/mobile-runtime';
+import { requestForegroundLocationPermission } from '@/lib/location-service';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -11,6 +13,19 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, allowedRoles, excludedRoles }: ProtectedRouteProps) {
   const { user, role, loading } = useAuth();
+
+  useEffect(() => {
+    if (!user || !isNativeRuntime()) return;
+
+    const permissionPromptKey = `location-permission-prompted:${user.id}`;
+    if (window.sessionStorage.getItem(permissionPromptKey) === '1') return;
+
+    void requestForegroundLocationPermission().then((result) => {
+      if (result.prompted) {
+        window.sessionStorage.setItem(permissionPromptKey, '1');
+      }
+    });
+  }, [user]);
 
   if (loading) {
     return (
