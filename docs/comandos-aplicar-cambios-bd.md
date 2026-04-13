@@ -37,13 +37,31 @@ supabase link --project-ref <TU_PROJECT_REF>
 supabase db push
 
 # Desplegar la Edge Function asíncrona de reportes
-supabase functions deploy generate-monthly-report --no-verify-jwt=false
+# (toma verify_jwt desde supabase/config.toml del repo)
+supabase functions deploy generate-monthly-report
 
 # Desplegar la Edge Function de snapshots diarios (Fase 3)
-supabase functions deploy snapshot-daily-facts --no-verify-jwt=true
+supabase functions deploy snapshot-daily-facts
 ```
 
 ## 4) Validación rápida post-migración
+
+### 4.0 Verificar que el fix de CORS quedó desplegado
+
+> Si cambiaste `supabase/config.toml` o los headers CORS de una función, **debes redeployar esa función** para que el cambio aplique en remoto.
+
+```bash
+supabase functions deploy generate-monthly-report
+```
+
+Smoke test de preflight (debe devolver 2xx y headers CORS):
+
+```bash
+curl -i -X OPTIONS "https://<PROJECT_REF>.supabase.co/functions/v1/generate-monthly-report" \
+  -H "Origin: https://<tu-dominio-frontend>" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: authorization,apikey,content-type,x-client-info"
+```
 
 ### 4.1 Verificar que existe la RPC principal
 
