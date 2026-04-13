@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
         },
       },
     });
-    const { data: authData, error: authError } = await authClient.auth.getUser();
+    const { data: authData, error: authError } = await authClient.auth.getUser(token);
 
     if (authError || !authData.user) {
       return new Response(JSON.stringify({ error: 'No autorizado' }), {

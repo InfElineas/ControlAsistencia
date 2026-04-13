@@ -8,6 +8,8 @@ interface GenerateMonthlyReportPayload {
 }
 
 interface GenerateMonthlyReportResponse {
+  code?: string;
+  message?: string;
   success?: boolean;
   run_id?: string;
   row_count?: number;
@@ -37,7 +39,7 @@ export async function generateMonthlyReport(
   const body = (await response.json().catch(() => ({}))) as GenerateMonthlyReportResponse;
 
   if (!response.ok) {
-    throw new Error(body?.error || 'Error al generar el reporte mensual asíncrono');
+    throw new Error(body?.error || body?.message || `Error ${response.status} al generar el reporte mensual asíncrono`);
   }
 
   return body;
