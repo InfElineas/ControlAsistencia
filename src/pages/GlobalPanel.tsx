@@ -310,7 +310,7 @@ export default function GlobalPanel() {
     setExporting(true);
 
     try {
-      const { data, error } = await supabase.rpc('get_attendance_report_monthly', {
+      const { data: reportData, error: reportError } = await supabase.rpc('get_attendance_report_monthly', {
         _from: dateRange.from,
         _to: dateRange.to,
         _department_id: null,
@@ -318,25 +318,9 @@ export default function GlobalPanel() {
         _include_heads: includeHeadsInGlobalReports,
       });
 
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) throw sessionError;
+      if (reportError) throw reportError;
 
-      const accessToken = sessionData.session?.access_token;
-
-      if (!accessToken) {
-        throw new Error('Tu sesión expiró. Inicia sesión nuevamente para generar reportes.');
-      }
-
-      const data = await generateMonthlyReport(accessToken, {
-        from: dateRange.from,
-        to: dateRange.to,
-        scope: 'global',
-        department_id: null,
-        include_heads: includeHeadsInGlobalReports,
-        format: 'csv',
-      });
-
-      const rows = (data || []) as AttendanceMonthlyRpcRow[];
+      const rows = (reportData || []) as AttendanceMonthlyRpcRow[];
       exportToXLSX(
         rows.map((row) => ({
           date: row.date,

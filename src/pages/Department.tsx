@@ -241,7 +241,7 @@ export default function Department() {
     setExporting(true);
 
     try {
-      const { data, error } = await supabase.rpc('get_attendance_report_monthly', {
+      const { data: reportData, error: reportError } = await supabase.rpc('get_attendance_report_monthly', {
         _from: dateRange.from,
         _to: dateRange.to,
         _department_id: selectedDepartmentId,
@@ -249,9 +249,9 @@ export default function Department() {
         _include_heads: false,
       });
 
-      if (error) throw error;
+      if (reportError) throw reportError;
 
-      const rows = (data || []) as AttendanceMonthlyRpcRow[];
+      const rows = (reportData || []) as AttendanceMonthlyRpcRow[];
       exportToXLSX(
         rows.map((row) => ({
           date: row.date,
