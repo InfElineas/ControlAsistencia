@@ -45,6 +45,7 @@ import { exportToXLSX, formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { useDepartments } from '@/hooks/useDepartments';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
+import { generateMonthlyReport } from '@/lib/monthly-report-client';
 import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 import { formatLastConnection } from '@/lib/last-connection';
 
@@ -317,7 +318,23 @@ export default function GlobalPanel() {
         _include_heads: includeHeadsInGlobalReports,
       });
 
-      if (error) throw error;
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error('Tu sesión expiró. Inicia sesión nuevamente para generar reportes.');
+      }
+
+      const data = await generateMonthlyReport(accessToken, {
+        from: dateRange.from,
+        to: dateRange.to,
+        scope: 'global',
+        department_id: null,
+        include_heads: includeHeadsInGlobalReports,
+        format: 'csv',
+      });
 
       const rows = (data || []) as AttendanceMonthlyRpcRow[];
       exportToXLSX(
