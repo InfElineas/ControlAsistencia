@@ -43,20 +43,30 @@ export function useManagedDepartments(userId?: string | null, primaryDepartmentI
 
       const { data: responsibilityRows, error } = await supabase
         .from('user_department_responsibilities')
-        .select('department_id, departments(id, name)')
+        .select('department_id')
         .eq('user_id', userId);
 
       if (error) throw error;
 
-      (responsibilityRows || []).forEach((row) => {
-        const department = Array.isArray(row.departments) ? row.departments[0] : row.departments;
-        if (!department?.id) return;
+      const additionalDepartmentIds = Array.from(
+        new Set((responsibilityRows || []).map((row) => row.department_id).filter(Boolean))
+      );
 
-        collected.set(department.id, {
-          id: department.id,
-          name: department.name,
+      if (additionalDepartmentIds.length > 0) {
+        const { data: additionalDepartments, error: additionalDepartmentsError } = await supabase
+          .from('departments')
+          .select('id, name')
+          .in('id', additionalDepartmentIds);
+
+        if (additionalDepartmentsError) throw additionalDepartmentsError;
+
+        (additionalDepartments || []).forEach((department) => {
+          collected.set(department.id, {
+            id: department.id,
+            name: department.name,
+          });
         });
-      });
+      }
 
       const orderedDepartments = Array.from(collected.values()).sort((a, b) => a.name.localeCompare(b.name));
       setDepartments(orderedDepartments);
