@@ -29,6 +29,7 @@ export async function generateMonthlyReport(
       'Content-Type': 'application/json',
       apikey: publishableKey,
       Authorization: `Bearer ${accessToken}`,
+      'x-client-auth': `Bearer ${accessToken}`,
     },
     body: JSON.stringify(payload),
   });
