@@ -309,7 +309,29 @@ export default function GlobalPanel() {
     setExporting(true);
 
     try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      let activeSession = sessionData.session;
+      const expiresAtMs = activeSession?.expires_at ? activeSession.expires_at * 1000 : 0;
+      const shouldRefreshSession = !activeSession || expiresAtMs <= Date.now() + 30_000;
+
+      if (shouldRefreshSession) {
+        const { data: refreshedSessionData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) throw refreshError;
+        activeSession = refreshedSessionData.session;
+      }
+
+      const accessToken = activeSession?.access_token;
+
+      if (!accessToken) {
+        throw new Error('Tu sesión expiró. Inicia sesión nuevamente para generar reportes.');
+      }
+
       const { data, error } = await supabase.functions.invoke('generate-monthly-report', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: {
           from: dateRange.from,
           to: dateRange.to,
@@ -323,8 +345,9 @@ export default function GlobalPanel() {
       if (error) throw error;
 
       toast.success(`Reporte generado. Run ID: ${data?.run_id ?? '-'}`);
-    } catch (error) {
-      toast.error('Error al generar el reporte mensual asíncrono');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Error al generar el reporte mensual asíncrono';
+      toast.error(message);
     }
 
     setExporting(false);
