@@ -34,6 +34,7 @@ import { calculateLateMinutes } from '@/lib/attendance-metrics';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
 import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 import { formatLastConnection } from '@/lib/last-connection';
+import { generateMonthlyReport } from '@/lib/monthly-report-client';
 
 interface DepartmentEmployee {
   id: string;
