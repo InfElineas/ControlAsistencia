@@ -240,8 +240,20 @@ export default function Department() {
     setExporting(true);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      let activeSession = sessionData.session;
+      const expiresAtMs = activeSession?.expires_at ? activeSession.expires_at * 1000 : 0;
+      const shouldRefreshSession = !activeSession || expiresAtMs <= Date.now() + 30_000;
+
+      if (shouldRefreshSession) {
+        const { data: refreshedSessionData, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) throw refreshError;
+        activeSession = refreshedSessionData.session;
+      }
+
+      const accessToken = activeSession?.access_token;
 
       if (!accessToken) {
         throw new Error('Tu sesión expiró. Inicia sesión nuevamente para generar reportes.');
