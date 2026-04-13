@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { formatTime } from '@/lib/xlsx-export';
+import { exportToXLSX, formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
@@ -240,24 +240,41 @@ export default function Department() {
     setExporting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('generate-monthly-report', {
-        body: {
-          from: dateRange.from,
-          to: dateRange.to,
-          scope: 'department',
-          department_id: selectedDepartmentId,
-          include_heads: false,
-          format: 'csv',
-        },
+      const { data, error } = await supabase.rpc('get_attendance_report_monthly', {
+        _from: dateRange.from,
+        _to: dateRange.to,
+        _department_id: selectedDepartmentId,
+        _scope: 'department',
+        _include_heads: false,
       });
 
       if (error) throw error;
-      toast.success(`Reporte generado. Run ID: ${data?.run_id ?? '-'}`);
-    } catch (error) {
-      toast.error('Error al generar el reporte mensual asíncrono');
-    }
 
-    setExporting(false);
+      const rows = (data || []) as AttendanceMonthlyRpcRow[];
+      exportToXLSX(
+        rows.map((row) => ({
+          date: row.date,
+          employee_name: row.employee_name,
+          employee_email: row.employee_email,
+          department: row.department,
+          status: row.status,
+          in_time: row.in_timestamp,
+          out_time: row.out_timestamp,
+          lateness_minutes: row.lateness_minutes,
+          inside_geofence: row.inside_geofence,
+          distance_m: row.distance_m,
+          absence_justification: row.absence_justification,
+        })),
+        `reporte-${departmentName || 'departamento'}-${dateRange.from}-${dateRange.to}`
+      );
+
+      toast.success(`Reporte XLSX generado (${rows.length} filas).`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Error al generar reporte XLSX';
+      toast.error(message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const metrics = {
