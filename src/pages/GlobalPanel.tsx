@@ -45,6 +45,7 @@ import { formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { useDepartments } from '@/hooks/useDepartments';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
+import { generateMonthlyReport } from '@/lib/monthly-report-client';
 import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 import { formatLastConnection } from '@/lib/last-connection';
 
@@ -324,21 +325,14 @@ export default function GlobalPanel() {
         throw new Error('Tu sesión expiró. Inicia sesión nuevamente para generar reportes.');
       }
 
-      const { data, error } = await supabase.functions.invoke('generate-monthly-report', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: {
-          from: dateRange.from,
-          to: dateRange.to,
-          scope: 'global',
-          department_id: null,
-          include_heads: includeHeadsInGlobalReports,
-          format: 'csv',
-        },
+      const data = await generateMonthlyReport(accessToken, {
+        from: dateRange.from,
+        to: dateRange.to,
+        scope: 'global',
+        department_id: null,
+        include_heads: includeHeadsInGlobalReports,
+        format: 'csv',
       });
-
-      if (error) throw error;
 
       toast.success(`Reporte generado. Run ID: ${data?.run_id ?? '-'}`);
     } catch (error: unknown) {

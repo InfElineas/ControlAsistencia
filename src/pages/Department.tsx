@@ -34,6 +34,7 @@ import { calculateLateMinutes } from '@/lib/attendance-metrics';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
 import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 import { formatLastConnection } from '@/lib/last-connection';
+import { generateMonthlyReport } from '@/lib/monthly-report-client';
 
 interface DepartmentEmployee {
   id: string;
@@ -255,21 +256,14 @@ export default function Department() {
         throw new Error('Tu sesión expiró. Inicia sesión nuevamente para generar reportes.');
       }
 
-      const { data, error } = await supabase.functions.invoke('generate-monthly-report', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: {
-          from: dateRange.from,
-          to: dateRange.to,
-          scope: 'department',
-          department_id: selectedDepartmentId,
-          include_heads: false,
-          format: 'csv',
-        },
+      const data = await generateMonthlyReport(accessToken, {
+        from: dateRange.from,
+        to: dateRange.to,
+        scope: 'department',
+        department_id: selectedDepartmentId,
+        include_heads: false,
+        format: 'csv',
       });
-
-      if (error) throw error;
       toast.success(`Reporte generado. Run ID: ${data?.run_id ?? '-'}`);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Error al generar el reporte mensual asíncrono';
