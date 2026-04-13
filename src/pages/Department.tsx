@@ -34,6 +34,7 @@ import { calculateLateMinutes } from '@/lib/attendance-metrics';
 import { useManagedDepartments } from '@/hooks/useManagedDepartments';
 import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 import { formatLastConnection } from '@/lib/last-connection';
+import { generateMonthlyReport } from '@/lib/monthly-report-client';
 
 interface DepartmentEmployee {
   id: string;
@@ -240,21 +241,33 @@ export default function Department() {
     setExporting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('generate-monthly-report', {
-        body: {
-          from: dateRange.from,
-          to: dateRange.to,
-          scope: 'department',
-          department_id: selectedDepartmentId,
-          include_heads: false,
-          format: 'csv',
-        },
-      });
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        await supabase.auth.signOut({ scope: 'local' });
+        throw new Error('Tu sesión no es válida. Inicia sesión nuevamente para generar reportes.');
+      }
 
-      if (error) throw error;
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error('Tu sesión expiró. Inicia sesión nuevamente para generar reportes.');
+      }
+
+      const data = await generateMonthlyReport(accessToken, {
+        from: dateRange.from,
+        to: dateRange.to,
+        scope: 'department',
+        department_id: selectedDepartmentId,
+        include_heads: false,
+        format: 'csv',
+      });
       toast.success(`Reporte generado. Run ID: ${data?.run_id ?? '-'}`);
-    } catch (error) {
-      toast.error('Error al generar el reporte mensual asíncrono');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Error al generar el reporte mensual asíncrono';
+      toast.error(message);
     }
 
     setExporting(false);
