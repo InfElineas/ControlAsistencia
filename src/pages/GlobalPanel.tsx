@@ -309,20 +309,16 @@ export default function GlobalPanel() {
     setExporting(true);
 
     try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        await supabase.auth.signOut({ scope: 'local' });
+        throw new Error('Tu sesión no es válida. Inicia sesión nuevamente para generar reportes.');
+      }
+
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
 
-      let activeSession = sessionData.session;
-      const expiresAtMs = activeSession?.expires_at ? activeSession.expires_at * 1000 : 0;
-      const shouldRefreshSession = !activeSession || expiresAtMs <= Date.now() + 30_000;
-
-      if (shouldRefreshSession) {
-        const { data: refreshedSessionData, error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError) throw refreshError;
-        activeSession = refreshedSessionData.session;
-      }
-
-      const accessToken = activeSession?.access_token;
+      const accessToken = sessionData.session?.access_token;
 
       if (!accessToken) {
         throw new Error('Tu sesión expiró. Inicia sesión nuevamente para generar reportes.');
