@@ -10,6 +10,11 @@ interface DeleteUserRequest {
   user_id: string;
 }
 
+interface AuthenticatedUser {
+  id: string;
+  email?: string | null;
+}
+
 async function cleanupUserReferences(
   adminClient: ReturnType<typeof createClient>,
   userId: string
@@ -85,20 +90,29 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("Unauthorized");
     }
 
-    const authClient = createClient(supabaseUrl, supabaseAnonKey ?? supabaseServiceKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+    const apiKeyFromRequest =
+      req.headers.get("apikey") ??
+      Deno.env.get("SUPABASE_ANON_KEY") ??
+      Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+
+    if (!apiKeyFromRequest) {
+      throw new Error("Unauthorized");
+    }
+
+    const authUserResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: apiKeyFromRequest,
       },
     });
 
-    const {
-      data: { user: currentUser },
-      error: userError,
-    } = await authClient.auth.getUser(accessToken);
+    if (!authUserResponse.ok) {
+      throw new Error("Unauthorized");
+    }
 
-    if (userError || !currentUser) {
+    const currentUser = (await authUserResponse.json()) as AuthenticatedUser;
+    if (!currentUser?.id) {
       throw new Error("Unauthorized");
     }
 
