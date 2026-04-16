@@ -10,6 +10,59 @@ interface DeleteUserRequest {
   user_id: string;
 }
 
+async function cleanupUserReferences(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string
+): Promise<void> {
+  const updateOperations = [
+    adminClient.from("audit_log").update({ user_id: null }).eq("user_id", userId),
+    adminClient
+      .from("attendance_absence_reviews")
+      .update({ reviewed_by: null })
+      .eq("reviewed_by", userId),
+    adminClient
+      .from("user_department_responsibilities")
+      .update({ created_by: null })
+      .eq("created_by", userId),
+    adminClient
+      .from("attendance_incidents")
+      .update({ reviewed_by: null })
+      .eq("reviewed_by", userId),
+    adminClient
+      .from("vacation_requests")
+      .update({ reviewed_by: null })
+      .eq("reviewed_by", userId),
+    adminClient
+      .from("geofence_config")
+      .update({ updated_by: null })
+      .eq("updated_by", userId),
+  ];
+
+  for (const operation of updateOperations) {
+    const { error } = await operation;
+    if (error) throw error;
+  }
+
+  const deleteOperations = [
+    adminClient.from("user_department_responsibilities").delete().eq("user_id", userId),
+    adminClient.from("attendance_absence_reviews").delete().eq("user_id", userId),
+    adminClient.from("attendance_incidents").delete().eq("user_id", userId),
+    adminClient.from("attendance_marks").delete().eq("user_id", userId),
+    adminClient.from("vacation_requests").delete().eq("user_id", userId),
+    adminClient.from("notifications").delete().eq("user_id", userId),
+    adminClient.from("rest_group_members").delete().eq("user_id", userId),
+    adminClient.from("report_runs").delete().eq("requested_by", userId),
+    adminClient.from("user_rest_schedule").delete().eq("user_id", userId),
+    adminClient.from("user_roles").delete().eq("user_id", userId),
+    adminClient.from("profiles").delete().eq("user_id", userId),
+  ];
+
+  for (const operation of deleteOperations) {
+    const { error } = await operation;
+    if (error) throw error;
+  }
+}
+
 serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -92,47 +145,41 @@ serve(async (req: Request): Promise<Response> => {
       }
     }
 
-
-    const { error: auditUpdateError } = await adminClient
-      .from("audit_log")
-      .update({ user_id: null })
-      .eq("user_id", user_id);
-    if (auditUpdateError) throw auditUpdateError;
-
-    // Limpiar referencias de revisión para permitir eliminación del usuario en Auth.
-    const { error: absenceReviewUpdateError } = await adminClient
-      .from("attendance_absence_reviews")
-      .update({ reviewed_by: null })
-      .eq("reviewed_by", user_id);
-    if (absenceReviewUpdateError) throw absenceReviewUpdateError;
-
-    const { error: responsibilitiesCreatedByUpdateError } = await adminClient
-      .from("user_department_responsibilities")
-      .update({ created_by: null })
-      .eq("created_by", user_id);
-    if (responsibilitiesCreatedByUpdateError) throw responsibilitiesCreatedByUpdateError;
-
-    const { error: incidentUpdateError } = await adminClient
-      .from("attendance_incidents")
-      .update({ reviewed_by: null })
-      .eq("reviewed_by", user_id);
-    if (incidentUpdateError) throw incidentUpdateError;
-
-    const { error: vacationUpdateError } = await adminClient
-      .from("vacation_requests")
-      .update({ reviewed_by: null })
-      .eq("reviewed_by", user_id);
-    if (vacationUpdateError) throw vacationUpdateError;
-
-    const { error: geofenceUpdateError } = await adminClient
-      .from("geofence_config")
-      .update({ updated_by: null })
-      .eq("updated_by", user_id);
-    if (geofenceUpdateError) throw geofenceUpdateError;
+    await cleanupUserReferences(adminClient, user_id);
 
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(user_id);
 
     if (deleteError) {
+      const normalizedDeleteMessage = String(deleteError.message || "").toLowerCase();
+      if (
+        normalizedDeleteMessage.includes("user not found") ||
+        normalizedDeleteMessage.includes("not found")
+      ) {
+        await adminClient.from("audit_log").insert({
+          user_id: currentUser.id,
+          action: "user_deleted",
+          description: `Se purgaron registros huérfanos para: ${targetProfile?.email || user_id}`,
+          source_ip: sourceIp,
+          metadata: {
+            actor_role: "superadmin",
+            target_user_id: user_id,
+            auth_delete_skipped: true,
+          },
+          table_name: "auth.users",
+          record_id: user_id,
+          old_data: {
+            email: targetProfile?.email || null,
+            full_name: targetProfile?.full_name || null,
+            roles: targetRoleList,
+          },
+        });
+
+        return new Response(JSON.stringify({ success: true, auth_user_missing: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+
       throw new Error(`No se pudo eliminar el usuario desde Auth Admin: ${deleteError.message}`);
     }
 
