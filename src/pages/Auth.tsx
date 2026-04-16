@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2, AlertCircle, Eye, EyeOff, User, Phone, Mail, Lock, Building2 } from 'lucide-react';
 import { z } from 'zod';
 import { mapAuthError } from '@/lib/error-messages';
+import { isNativeRuntime } from '@/lib/mobile-runtime';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -31,6 +32,7 @@ const signupSchema = z.object({
 });
 
 export default function Auth() {
+  const nativeRuntime = isNativeRuntime();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,11 +43,27 @@ export default function Auth() {
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberCredentials, setRememberCredentials] = useState(nativeRuntime);
 
   const { signIn, signUp } = useAuth();
   const { departments, loading: deptLoading } = useDepartments();
   const navigate = useNavigate();
   const fieldClassName = 'h-11 rounded-2xl border-slate-200 bg-white/80 px-4 text-base placeholder:text-slate-400';
+
+  useEffect(() => {
+    if (!nativeRuntime) return;
+
+    const storedEmail = window.localStorage.getItem('native-login-email');
+    const storedPassword = window.localStorage.getItem('native-login-password');
+
+    if (storedEmail) {
+      setEmail(storedEmail);
+    }
+
+    if (storedPassword) {
+      setPassword(storedPassword);
+    }
+  }, [nativeRuntime]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +89,14 @@ export default function Auth() {
           setError(mapAuthError(error, 'signin'));
           setLoading(false);
           return;
+        }
+
+        if (nativeRuntime && rememberCredentials) {
+          window.localStorage.setItem('native-login-email', normalizedEmail);
+          window.localStorage.setItem('native-login-password', password);
+        } else if (nativeRuntime) {
+          window.localStorage.removeItem('native-login-email');
+          window.localStorage.removeItem('native-login-password');
         }
       } else {
         const normalizedEmail = email.trim().toLowerCase();
@@ -174,6 +200,18 @@ export default function Auth() {
                 required
               />
             </div>
+
+            {isLogin && nativeRuntime && (
+              <label className="flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={rememberCredentials}
+                  onChange={(e) => setRememberCredentials(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-[#1D3F75] focus:ring-[#1D3F75]"
+                />
+                Recordar usuario y contraseña en este dispositivo
+              </label>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="password" className="inline-flex items-center gap-2 text-slate-700 text-[1rem]">
