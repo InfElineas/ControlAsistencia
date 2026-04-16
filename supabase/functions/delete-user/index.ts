@@ -76,6 +76,8 @@ serve(async (req: Request): Promise<Response> => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey =
+      Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const accessToken = authHeader.replace(/^Bearer\s+/i, "").trim();
@@ -83,10 +85,18 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("Unauthorized");
     }
 
+    const authClient = createClient(supabaseUrl, supabaseAnonKey ?? supabaseServiceKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    });
+
     const {
       data: { user: currentUser },
       error: userError,
-    } = await adminClient.auth.getUser(accessToken);
+    } = await authClient.auth.getUser(accessToken);
 
     if (userError || !currentUser) {
       throw new Error("Unauthorized");
