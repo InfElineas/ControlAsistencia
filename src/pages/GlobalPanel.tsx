@@ -41,11 +41,10 @@ import {
 } from 'lucide-react';
 import { format, startOfMonth, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { exportToXLSX, formatTime } from '@/lib/xlsx-export';
+import { exportAttendanceMatrixXLSX, formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { useDepartments } from '@/hooks/useDepartments';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
-import { generateMonthlyReport } from '@/lib/monthly-report-client';
 import { ReportRunsCard } from '@/components/reports/ReportRunsCard';
 import { formatLastConnection } from '@/lib/last-connection';
 
@@ -85,6 +84,7 @@ interface AttendanceSummary {
   phone: string | null;
   last_connection_at: string | null;
   role: string;
+  departmentId: string;
   department: string;
   todayStatus: 'PRESENTE' | 'TARDE' | 'AUSENTE' | 'DESCANSO' | 'NO_LABORABLE' | null;
   inTime: string | null;
@@ -134,7 +134,7 @@ export default function GlobalPanel() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState('');
-  const [selectedDept, setSelectedDept] = useState<string>('all');
+  const [selectedDeptId, setSelectedDeptId] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [dateRange, setDateRange] = useState({
     from: format(subDays(new Date(), 7), 'yyyy-MM-dd'),
@@ -289,6 +289,7 @@ export default function GlobalPanel() {
           phone: emp.phone,
           last_connection_at: emp.last_connection_at,
           role: emp.role,
+          departmentId: emp.department_id,
           department: emp.department_name,
           todayStatus: emp.department_paused ? 'NO_LABORABLE' : inMark ? (lateMinutes > 0 ? 'TARDE' : 'PRESENTE') : 'AUSENTE',
           inTime: inMark?.timestamp || null,
@@ -310,18 +311,20 @@ export default function GlobalPanel() {
     setExporting(true);
 
     try {
+      const departmentId = selectedDepartment?.id ?? null;
+      const reportScope = departmentId ? 'department' : 'global';
       const { data: reportData, error: reportError } = await supabase.rpc('get_attendance_report_monthly', {
         _from: dateRange.from,
         _to: dateRange.to,
-        _department_id: null,
-        _scope: 'global',
+        _department_id: departmentId,
+        _scope: reportScope,
         _include_heads: includeHeadsInGlobalReports,
       });
 
       if (reportError) throw reportError;
 
       const rows = (reportData || []) as AttendanceMonthlyRpcRow[];
-      exportToXLSX(
+      exportAttendanceMatrixXLSX(
         rows.map((row) => ({
           date: row.date,
           employee_name: row.employee_name,
@@ -335,10 +338,20 @@ export default function GlobalPanel() {
           distance_m: row.distance_m,
           absence_justification: row.absence_justification,
         })),
-        `reporte-global-${dateRange.from}-${dateRange.to}`
+        selectedDepartment
+          ? `reporte-${selectedDepartment.name}-${dateRange.from}-${dateRange.to}`
+          : `reporte-global-${dateRange.from}-${dateRange.to}`,
+        {
+          from: dateRange.from,
+          to: dateRange.to,
+        }
       );
 
-      toast.success(`Reporte XLSX generado (${rows.length} filas).`);
+      toast.success(
+        selectedDepartment
+          ? `Reporte XLSX de ${selectedDepartment.name} generado (${rows.length} filas).`
+          : `Reporte XLSX global generado (${rows.length} filas).`
+      );
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Error al generar reporte XLSX';
       toast.error(message);
@@ -430,8 +443,8 @@ export default function GlobalPanel() {
   };
 
   const scopedAttendance = useMemo(
-    () => (selectedDept === 'all' ? attendance : attendance.filter((row) => row.department === selectedDept)),
-    [attendance, selectedDept]
+    () => (selectedDeptId === 'all' ? attendance : attendance.filter((row) => row.departmentId === selectedDeptId)),
+    [attendance, selectedDeptId]
   );
 
   const departmentHeadcount = useMemo(() => {
@@ -446,7 +459,7 @@ export default function GlobalPanel() {
 
     const map = new Map<string, DepartmentSummary>();
 
-    attendance.forEach((row) => {
+    scopedAttendance.forEach((row) => {
       if (!map.has(row.department)) {
         map.set(row.department, {
           department: row.department,
@@ -468,7 +481,7 @@ export default function GlobalPanel() {
     });
 
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
-  }, [attendance]);
+  }, [scopedAttendance]);
 
   const metrics = {
     total: scopedAttendance.length,
@@ -489,7 +502,7 @@ export default function GlobalPanel() {
     const matchesSearch =
       a.employeeName.toLowerCase().includes(search.toLowerCase()) ||
       a.email.toLowerCase().includes(search.toLowerCase());
-    const matchesDept = selectedDept === 'all' || a.department === selectedDept;
+    const matchesDept = selectedDeptId === 'all' || a.departmentId === selectedDeptId;
     return matchesSearch && matchesDept;
   });
 
@@ -501,13 +514,17 @@ export default function GlobalPanel() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, selectedDept]);
+  }, [search, selectedDeptId]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
     }
   }, [currentPage, totalPages]);
+
+  const selectedDepartment = selectedDeptId === 'all'
+    ? null
+    : departments.find((dept) => dept.id === selectedDeptId) ?? null;
 
   const handleSetAbsenceReview = async (targetUserId: string, isJustified: boolean) => {
     try {
@@ -569,35 +586,67 @@ export default function GlobalPanel() {
           <div>
             <h1 className="text-2xl font-bold">Panel Global</h1>
             <p className="text-muted-foreground">
-              Vista general de todos los empleados · Jefes incluidos: {includeHeadsInGlobalReports ? 'Sí' : 'No'} · Filtro: {selectedDept === 'all' ? 'Todos los departamentos' : selectedDept}
+              Vista general de todos los empleados · Jefes incluidos: {includeHeadsInGlobalReports ? 'Sí' : 'No'} · Filtro: {selectedDepartment?.name ?? 'Todos los departamentos'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              type="date"
-              value={dateRange.from}
-              onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))}
-              className="w-auto"
-            />
-            <span className="text-muted-foreground">-</span>
-            <Input
-              type="date"
-              value={dateRange.to}
-              onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))}
-              className="w-auto"
-            />
-            <Button onClick={handleExport} disabled={exporting}>
-              {exporting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  XLSX Global
-                </>
-              )}
-            </Button>
-          </div>
         </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Select value={selectedDeptId} onValueChange={setSelectedDeptId}>
+                  <SelectTrigger className="w-full sm:w-56">
+                    <SelectValue placeholder="Departamento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los departamentos</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar trabajador..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9 w-full sm:w-72"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="date"
+                  value={dateRange.from}
+                  onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))}
+                  className="w-auto"
+                />
+                <span className="text-muted-foreground">-</span>
+                <Input
+                  type="date"
+                  value={dateRange.to}
+                  onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))}
+                  className="w-auto"
+                />
+                <Button onClick={handleExport} disabled={exporting}>
+                  {exporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      {selectedDepartment ? `XLSX ${selectedDepartment.name}` : 'XLSX Global'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Metrics */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -674,33 +723,7 @@ export default function GlobalPanel() {
         {/* Filters and Table */}
         <Card>
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle>Asistencia de hoy</CardTitle>
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={selectedDept} onValueChange={setSelectedDept}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Departamento" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.name}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 w-full sm:w-64"
-                  />
-                </div>
-              </div>
-            </div>
+            <CardTitle>Asistencia de hoy</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -831,7 +854,15 @@ export default function GlobalPanel() {
           </CardContent>
         </Card>
 
-        <ReportRunsCard scope="global" title="Ejecuciones de reportes globales" />
+        <ReportRunsCard
+          scope={selectedDepartment ? 'department' : 'global'}
+          departmentId={selectedDepartment?.id ?? null}
+          title={
+            selectedDepartment
+              ? `Ejecuciones de reportes · ${selectedDepartment.name}`
+              : 'Ejecuciones de reportes globales'
+          }
+        />
 
         <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
           <DialogContent>
