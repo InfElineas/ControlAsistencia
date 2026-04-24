@@ -14,6 +14,18 @@ export interface AttendanceReportRow {
   absence_justification?: 'JUSTIFICADA' | 'NO_JUSTIFICADA' | 'PENDIENTE' | '-';
 }
 
+type AttendanceStatus = AttendanceReportRow['status'];
+
+const STATUS_CODES: Record<AttendanceStatus, string> = {
+  PRESENTE: 'P',
+  TARDE: 'T',
+  AUSENTE: 'A',
+  DESCANSO: 'D',
+  NO_LABORABLE: 'NL',
+};
+
+const SUMMARY_COLUMNS: AttendanceStatus[] = ['PRESENTE', 'TARDE', 'AUSENTE', 'DESCANSO', 'NO_LABORABLE'];
+
 function formatMinutesAsHours(value: number | null): string {
   if (value === null || value <= 0) return '-';
   const hours = Math.floor(value / 60)
@@ -71,6 +83,171 @@ export function exportToXLSX(data: AttendanceReportRow[], filename: string) {
   XLSX.utils.book_append_sheet(wb, ws, 'Asistencia');
 
   // Generate file and download
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
+function getMonthKey(isoDate: string): string {
+  return isoDate.slice(0, 7);
+}
+
+function buildMonthDays(monthKey: string): string[] {
+  const [yearText, monthText] = monthKey.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const totalDays = new Date(year, month, 0).getDate();
+  return Array.from({ length: totalDays }, (_, index) => `${monthKey}-${String(index + 1).padStart(2, '0')}`);
+}
+
+function listMonthKeys(from: string, to: string): string[] {
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  const keys: string[] = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const last = new Date(end.getFullYear(), end.getMonth(), 1);
+
+  while (cursor <= last) {
+    keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return keys;
+}
+
+function formatMonthLabel(monthKey: string): string {
+  const [yearText, monthText] = monthKey.split('-');
+  const date = new Date(Number(yearText), Number(monthText) - 1, 1);
+  const month = date.toLocaleDateString('es-ES', { month: 'long' });
+  return `${month[0].toUpperCase()}${month.slice(1)} ${yearText}`;
+}
+
+export function exportAttendanceMatrixXLSX(
+  data: AttendanceReportRow[],
+  filename: string,
+  options: { from: string; to: string }
+) {
+  const wb = XLSX.utils.book_new();
+  const monthKeys = listMonthKeys(options.from, options.to);
+  const detailMonthKey = monthKeys[monthKeys.length - 1] ?? getMonthKey(options.to);
+  const detailMonthDays = buildMonthDays(detailMonthKey);
+
+  type EmployeeAggregate = {
+    department: string;
+    name: string;
+    email: string;
+    monthlySummary: Record<string, Record<AttendanceStatus, number>>;
+    dailyStatus: Record<string, AttendanceStatus>;
+  };
+
+  const employeeMap = new Map<string, EmployeeAggregate>();
+
+  for (const row of data) {
+    const key = `${row.department}||${row.employee_email}`;
+    if (!employeeMap.has(key)) {
+      employeeMap.set(key, {
+        department: row.department,
+        name: row.employee_name,
+        email: row.employee_email,
+        monthlySummary: {},
+        dailyStatus: {},
+      });
+    }
+
+    const aggregate = employeeMap.get(key)!;
+    const monthKey = getMonthKey(row.date);
+    if (!aggregate.monthlySummary[monthKey]) {
+      aggregate.monthlySummary[monthKey] = {
+        PRESENTE: 0,
+        TARDE: 0,
+        AUSENTE: 0,
+        DESCANSO: 0,
+        NO_LABORABLE: 0,
+      };
+    }
+
+    aggregate.monthlySummary[monthKey][row.status] += 1;
+    aggregate.dailyStatus[row.date] = row.status;
+  }
+
+  const headerRow1: Array<string | number> = ['Área', 'Nombres y apellidos'];
+  const headerRow2: Array<string | number> = ['', ''];
+  const merges: XLSX.Range[] = [
+    { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },
+    { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+  ];
+
+  let cursorCol = 2;
+  for (const monthKey of monthKeys) {
+    headerRow1.push(`Resumen ${formatMonthLabel(monthKey)}`);
+    headerRow2.push('Presente', 'Tarde', 'Ausente', 'Descanso', 'No laborable');
+    merges.push({ s: { r: 0, c: cursorCol }, e: { r: 0, c: cursorCol + 4 } });
+    cursorCol += 5;
+  }
+
+  headerRow1.push(`Detalle ${formatMonthLabel(detailMonthKey)}`);
+  for (const day of detailMonthDays) {
+    headerRow2.push(Number(day.slice(-2)));
+  }
+  merges.push({ s: { r: 0, c: cursorCol }, e: { r: 0, c: cursorCol + detailMonthDays.length - 1 } });
+  cursorCol += detailMonthDays.length;
+
+  headerRow1.push(`Resumen ${formatMonthLabel(detailMonthKey)}`);
+  headerRow2.push('Presente', 'Tarde', 'Ausente', 'Descanso', 'No laborable');
+  merges.push({ s: { r: 0, c: cursorCol }, e: { r: 0, c: cursorCol + 4 } });
+
+  const rows: Array<Array<string | number>> = [headerRow1, headerRow2];
+  const employees = Array.from(employeeMap.values()).sort((a, b) =>
+    a.department.localeCompare(b.department) || a.name.localeCompare(b.name)
+  );
+
+  for (const employee of employees) {
+    const row: Array<string | number> = [employee.department, employee.name];
+
+    for (const monthKey of monthKeys) {
+      const monthSummary = employee.monthlySummary[monthKey] || {
+        PRESENTE: 0,
+        TARDE: 0,
+        AUSENTE: 0,
+        DESCANSO: 0,
+        NO_LABORABLE: 0,
+      };
+      for (const status of SUMMARY_COLUMNS) {
+        row.push(monthSummary[status]);
+      }
+    }
+
+    for (const day of detailMonthDays) {
+      const status = employee.dailyStatus[day];
+      row.push(status ? STATUS_CODES[status] : '');
+    }
+
+    const detailSummary = employee.monthlySummary[detailMonthKey] || {
+      PRESENTE: 0,
+      TARDE: 0,
+      AUSENTE: 0,
+      DESCANSO: 0,
+      NO_LABORABLE: 0,
+    };
+    for (const status of SUMMARY_COLUMNS) {
+      row.push(detailSummary[status]);
+    }
+
+    rows.push(row);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!merges'] = merges;
+  ws['!cols'] = [
+    { wch: 18 },
+    { wch: 34 },
+    ...Array.from({ length: monthKeys.length * 5 }, () => ({ wch: 10 })),
+    ...Array.from({ length: detailMonthDays.length }, () => ({ wch: 4 })),
+    ...Array.from({ length: 5 }, () => ({ wch: 10 })),
+  ];
+
+  ws['!autofilter'] = {
+    ref: `A2:${XLSX.utils.encode_col(rows[0].length - 1)}2`,
+  };
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 

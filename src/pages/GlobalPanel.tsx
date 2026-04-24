@@ -41,7 +41,7 @@ import {
 } from 'lucide-react';
 import { format, startOfMonth, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { exportToXLSX, formatTime } from '@/lib/xlsx-export';
+import { exportAttendanceMatrixXLSX, formatTime } from '@/lib/xlsx-export';
 import { toast } from 'sonner';
 import { useDepartments } from '@/hooks/useDepartments';
 import { calculateLateMinutes } from '@/lib/attendance-metrics';
@@ -324,7 +324,7 @@ export default function GlobalPanel() {
       if (reportError) throw reportError;
 
       const rows = (reportData || []) as AttendanceMonthlyRpcRow[];
-      exportToXLSX(
+      exportAttendanceMatrixXLSX(
         rows.map((row) => ({
           date: row.date,
           employee_name: row.employee_name,
@@ -340,7 +340,11 @@ export default function GlobalPanel() {
         })),
         selectedDepartment
           ? `reporte-${selectedDepartment.name}-${dateRange.from}-${dateRange.to}`
-          : `reporte-global-${dateRange.from}-${dateRange.to}`
+          : `reporte-global-${dateRange.from}-${dateRange.to}`,
+        {
+          from: dateRange.from,
+          to: dateRange.to,
+        }
       );
 
       toast.success(
