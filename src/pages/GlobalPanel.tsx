@@ -589,32 +589,64 @@ export default function GlobalPanel() {
               Vista general de todos los empleados · Jefes incluidos: {includeHeadsInGlobalReports ? 'Sí' : 'No'} · Filtro: {selectedDepartment?.name ?? 'Todos los departamentos'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              type="date"
-              value={dateRange.from}
-              onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))}
-              className="w-auto"
-            />
-            <span className="text-muted-foreground">-</span>
-            <Input
-              type="date"
-              value={dateRange.to}
-              onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))}
-              className="w-auto"
-            />
-            <Button onClick={handleExport} disabled={exporting}>
-              {exporting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  {selectedDepartment ? `XLSX ${selectedDepartment.name}` : 'XLSX Global'}
-                </>
-              )}
-            </Button>
-          </div>
         </div>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Select value={selectedDeptId} onValueChange={setSelectedDeptId}>
+                  <SelectTrigger className="w-full sm:w-56">
+                    <SelectValue placeholder="Departamento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los departamentos</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar trabajador..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9 w-full sm:w-72"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="date"
+                  value={dateRange.from}
+                  onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))}
+                  className="w-auto"
+                />
+                <span className="text-muted-foreground">-</span>
+                <Input
+                  type="date"
+                  value={dateRange.to}
+                  onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))}
+                  className="w-auto"
+                />
+                <Button onClick={handleExport} disabled={exporting}>
+                  {exporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      {selectedDepartment ? `XLSX ${selectedDepartment.name}` : 'XLSX Global'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Metrics */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -691,33 +723,7 @@ export default function GlobalPanel() {
         {/* Filters and Table */}
         <Card>
           <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <CardTitle>Asistencia de hoy</CardTitle>
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={selectedDeptId} onValueChange={setSelectedDeptId}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Departamento" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 w-full sm:w-64"
-                  />
-                </div>
-              </div>
-            </div>
+            <CardTitle>Asistencia de hoy</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
