@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 
 export interface AttendanceReportRow {
   date: string;
+  user_id?: string;
   employee_name: string;
   employee_email: string;
   department: string;
@@ -12,6 +13,7 @@ export interface AttendanceReportRow {
   inside_geofence: boolean | null;
   distance_m: number | null;
   absence_justification?: 'JUSTIFICADA' | 'NO_JUSTIFICADA' | 'PENDIENTE' | '-';
+  vacation_status?: 'VACACIONES' | '-';
 }
 
 type AttendanceStatus = AttendanceReportRow['status'];
@@ -25,6 +27,16 @@ const STATUS_CODES: Record<AttendanceStatus, string> = {
 };
 
 const SUMMARY_COLUMNS: AttendanceStatus[] = ['PRESENTE', 'TARDE', 'AUSENTE', 'DESCANSO', 'NO_LABORABLE'];
+const SUMMARY_HEADERS = [
+  'Presente',
+  'Tarde',
+  'Ausente',
+  'Descanso',
+  'No laborable',
+  'Vacaciones',
+  'Aus. justificada',
+  'Aus. no justificada',
+];
 
 function formatMinutesAsHours(value: number | null): string {
   if (value === null || value <= 0) return '-';
@@ -58,6 +70,7 @@ export function exportToXLSX(data: AttendanceReportRow[], filename: string) {
     'Hora Salida': row.out_time || '-',
     'Tardanza (h:mm)': formatMinutesAsHours(row.lateness_minutes),
     'Ausencia Justificada': row.absence_justification ?? '-',
+    'Vacaciones': row.vacation_status ?? '-',
     'Dentro Geofence': row.inside_geofence === null ? '-' : (row.inside_geofence ? 'Sí' : 'No'),
     'Distancia (m)': row.distance_m ?? '-',
   }));
@@ -75,6 +88,7 @@ export function exportToXLSX(data: AttendanceReportRow[], filename: string) {
     { wch: 12 },  // Hora Salida
     { wch: 16 },  // Tardanza (h:mm)
     { wch: 22 },  // Ausencia Justificada
+    { wch: 12 },  // Vacaciones
     { wch: 15 },  // Dentro Geofence
     { wch: 12 },  // Distancia
   ];
@@ -133,8 +147,13 @@ export function exportAttendanceMatrixXLSX(
     department: string;
     name: string;
     email: string;
-    monthlySummary: Record<string, Record<AttendanceStatus, number>>;
+    monthlySummary: Record<string, Record<AttendanceStatus, number> & {
+      vacations: number;
+      justified_absences: number;
+      unjustified_absences: number;
+    }>;
     dailyStatus: Record<string, AttendanceStatus>;
+    dailyMeta: Record<string, { vacation: boolean; absenceJustification: AttendanceReportRow['absence_justification'] }>;
   };
 
   const employeeMap = new Map<string, EmployeeAggregate>();
@@ -148,6 +167,7 @@ export function exportAttendanceMatrixXLSX(
         email: row.employee_email,
         monthlySummary: {},
         dailyStatus: {},
+        dailyMeta: {},
       });
     }
 
@@ -160,11 +180,27 @@ export function exportAttendanceMatrixXLSX(
         AUSENTE: 0,
         DESCANSO: 0,
         NO_LABORABLE: 0,
+        vacations: 0,
+        justified_absences: 0,
+        unjustified_absences: 0,
       };
     }
 
     aggregate.monthlySummary[monthKey][row.status] += 1;
+    if (row.vacation_status === 'VACACIONES') {
+      aggregate.monthlySummary[monthKey].vacations += 1;
+    }
+    if (row.status === 'AUSENTE' && row.absence_justification === 'JUSTIFICADA') {
+      aggregate.monthlySummary[monthKey].justified_absences += 1;
+    }
+    if (row.status === 'AUSENTE' && row.absence_justification === 'NO_JUSTIFICADA') {
+      aggregate.monthlySummary[monthKey].unjustified_absences += 1;
+    }
     aggregate.dailyStatus[row.date] = row.status;
+    aggregate.dailyMeta[row.date] = {
+      vacation: row.vacation_status === 'VACACIONES',
+      absenceJustification: row.absence_justification,
+    };
   }
 
   const headerRow1: Array<string | number> = ['Área', 'Nombres y apellidos'];
@@ -177,9 +213,9 @@ export function exportAttendanceMatrixXLSX(
   let cursorCol = 2;
   for (const monthKey of monthKeys) {
     headerRow1.push(`Resumen ${formatMonthLabel(monthKey)}`);
-    headerRow2.push('Presente', 'Tarde', 'Ausente', 'Descanso', 'No laborable');
-    merges.push({ s: { r: 0, c: cursorCol }, e: { r: 0, c: cursorCol + 4 } });
-    cursorCol += 5;
+    headerRow2.push(...SUMMARY_HEADERS);
+    merges.push({ s: { r: 0, c: cursorCol }, e: { r: 0, c: cursorCol + SUMMARY_HEADERS.length - 1 } });
+    cursorCol += SUMMARY_HEADERS.length;
   }
 
   headerRow1.push(`Detalle ${formatMonthLabel(detailMonthKey)}`);
@@ -190,8 +226,8 @@ export function exportAttendanceMatrixXLSX(
   cursorCol += detailMonthDays.length;
 
   headerRow1.push(`Resumen ${formatMonthLabel(detailMonthKey)}`);
-  headerRow2.push('Presente', 'Tarde', 'Ausente', 'Descanso', 'No laborable');
-  merges.push({ s: { r: 0, c: cursorCol }, e: { r: 0, c: cursorCol + 4 } });
+  headerRow2.push(...SUMMARY_HEADERS);
+  merges.push({ s: { r: 0, c: cursorCol }, e: { r: 0, c: cursorCol + SUMMARY_HEADERS.length - 1 } });
 
   const rows: Array<Array<string | number>> = [headerRow1, headerRow2];
   const employees = Array.from(employeeMap.values()).sort((a, b) =>
@@ -208,15 +244,31 @@ export function exportAttendanceMatrixXLSX(
         AUSENTE: 0,
         DESCANSO: 0,
         NO_LABORABLE: 0,
+        vacations: 0,
+        justified_absences: 0,
+        unjustified_absences: 0,
       };
       for (const status of SUMMARY_COLUMNS) {
         row.push(monthSummary[status]);
       }
+      row.push(monthSummary.vacations, monthSummary.justified_absences, monthSummary.unjustified_absences);
     }
 
     for (const day of detailMonthDays) {
       const status = employee.dailyStatus[day];
-      row.push(status ? STATUS_CODES[status] : '');
+      const meta = employee.dailyMeta[day];
+      if (!status) {
+        row.push('');
+      } else if (status === 'AUSENTE') {
+        const justification = meta?.absenceJustification;
+        if (justification === 'JUSTIFICADA') row.push('AJ');
+        else if (justification === 'NO_JUSTIFICADA') row.push('ANJ');
+        else row.push('AP');
+      } else if (meta?.vacation) {
+        row.push('V');
+      } else {
+        row.push(STATUS_CODES[status]);
+      }
     }
 
     const detailSummary = employee.monthlySummary[detailMonthKey] || {
@@ -225,10 +277,14 @@ export function exportAttendanceMatrixXLSX(
       AUSENTE: 0,
       DESCANSO: 0,
       NO_LABORABLE: 0,
+      vacations: 0,
+      justified_absences: 0,
+      unjustified_absences: 0,
     };
     for (const status of SUMMARY_COLUMNS) {
       row.push(detailSummary[status]);
     }
+    row.push(detailSummary.vacations, detailSummary.justified_absences, detailSummary.unjustified_absences);
 
     rows.push(row);
   }
@@ -238,9 +294,9 @@ export function exportAttendanceMatrixXLSX(
   ws['!cols'] = [
     { wch: 18 },
     { wch: 34 },
-    ...Array.from({ length: monthKeys.length * 5 }, () => ({ wch: 10 })),
+    ...Array.from({ length: monthKeys.length * SUMMARY_HEADERS.length }, () => ({ wch: 10 })),
     ...Array.from({ length: detailMonthDays.length }, () => ({ wch: 4 })),
-    ...Array.from({ length: 5 }, () => ({ wch: 10 })),
+    ...Array.from({ length: SUMMARY_HEADERS.length }, () => ({ wch: 12 })),
   ];
 
   ws['!autofilter'] = {

@@ -115,6 +115,7 @@ interface EmployeeDetails {
 
 interface AttendanceMonthlyRpcRow {
   date: string;
+  user_id: string;
   employee_name: string;
   employee_email: string;
   department: string;
@@ -324,9 +325,29 @@ export default function GlobalPanel() {
       if (reportError) throw reportError;
 
       const rows = (reportData || []) as AttendanceMonthlyRpcRow[];
+      const userIds = Array.from(new Set(rows.map((row) => row.user_id).filter(Boolean)));
+
+      const { data: vacationsData, error: vacationsError } = await supabase
+        .from('vacation_requests')
+        .select('user_id, start_date, end_date, status')
+        .in('user_id', userIds)
+        .eq('status', 'approved')
+        .lte('start_date', dateRange.to)
+        .gte('end_date', dateRange.from);
+
+      if (vacationsError) throw vacationsError;
+
+      const vacationsByUser = new Map<string, Array<{ start_date: string; end_date: string }>>();
+      (vacationsData || []).forEach((item) => {
+        const existing = vacationsByUser.get(item.user_id) || [];
+        existing.push({ start_date: item.start_date, end_date: item.end_date });
+        vacationsByUser.set(item.user_id, existing);
+      });
+
       exportAttendanceMatrixXLSX(
         rows.map((row) => ({
           date: row.date,
+          user_id: row.user_id,
           employee_name: row.employee_name,
           employee_email: row.employee_email,
           department: row.department,
@@ -337,6 +358,11 @@ export default function GlobalPanel() {
           inside_geofence: row.inside_geofence,
           distance_m: row.distance_m,
           absence_justification: row.absence_justification,
+          vacation_status: (vacationsByUser.get(row.user_id) || []).some(
+            (vacation) => row.date >= vacation.start_date && row.date <= vacation.end_date
+          )
+            ? 'VACACIONES'
+            : '-',
         })),
         selectedDepartment
           ? `reporte-${selectedDepartment.name}-${dateRange.from}-${dateRange.to}`
