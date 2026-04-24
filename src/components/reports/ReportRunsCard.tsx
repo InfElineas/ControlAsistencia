@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Loader2, RefreshCw, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 
 type ReportScope = 'global' | 'department';
 
@@ -15,6 +16,9 @@ interface ReportRunItem {
   period_start: string;
   period_end: string;
   created_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  retry_count: number | null;
   row_count: number | null;
   artifact_bucket: string | null;
   artifact_path: string | null;
@@ -43,11 +47,13 @@ export function ReportRunsCard({ scope, departmentId = null, title = 'Reportes g
   const [items, setItems] = useState<ReportRunItem[]>([]);
   const [kpis, setKpis] = useState<ReportRunKpis | null>(null);
 
-  const fetchRuns = async () => {
+  const fetchRuns = useCallback(async () => {
     setLoading(true);
 
-    const { data: kpiData } = await supabase.rpc('get_report_runs_operational_kpis', {
+    const { data: kpiData } = await supabase.rpc('get_report_runs_operational_kpis_v2', {
       _from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      _scope: scope,
+      _department_id: scope === 'department' ? departmentId : null,
     });
     if (Array.isArray(kpiData) && kpiData[0]) {
       setKpis(kpiData[0] as ReportRunKpis);
@@ -55,7 +61,7 @@ export function ReportRunsCard({ scope, departmentId = null, title = 'Reportes g
 
     let query = supabase
       .from('report_runs' as never)
-      .select('id, status, period_start, period_end, created_at, row_count, artifact_bucket, artifact_path, error')
+      .select('id, status, period_start, period_end, created_at, finished_at, duration_ms, retry_count, row_count, artifact_bucket, artifact_path, error')
       .eq('scope', scope)
       .order('created_at', { ascending: false })
       .limit(8);
@@ -73,11 +79,37 @@ export function ReportRunsCard({ scope, departmentId = null, title = 'Reportes g
     }
 
     setLoading(false);
-  };
+  }, [scope, departmentId]);
 
   useEffect(() => {
     fetchRuns();
-  }, [scope, departmentId]);
+  }, [fetchRuns]);
+
+  useEffect(() => {
+    const hasPendingRuns = items.some((item) => item.status === 'queued' || item.status === 'running');
+    if (!hasPendingRuns) return;
+
+    const interval = window.setInterval(() => {
+      fetchRuns();
+    }, 15000);
+
+    return () => window.clearInterval(interval);
+  }, [items, fetchRuns]);
+
+  const getStatusBadge = (status: ReportRunItem['status']) => {
+    switch (status) {
+      case 'completed':
+        return <Badge variant="default">Completado</Badge>;
+      case 'failed':
+        return <Badge variant="destructive">Fallido</Badge>;
+      case 'running':
+        return <Badge variant="secondary">En progreso</Badge>;
+      case 'queued':
+        return <Badge variant="outline">En cola</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
 
   const handleDownload = async (item: ReportRunItem) => {
     if (!item.artifact_bucket || !item.artifact_path) {
@@ -121,8 +153,16 @@ export function ReportRunsCard({ scope, departmentId = null, title = 'Reportes g
               <p className="font-semibold">{kpis.p95_duration_ms ? `${Math.round(kpis.p95_duration_ms / 1000)}s` : '-'}</p>
             </div>
             <div className="rounded-md border p-2">
+              <p className="text-[11px] text-muted-foreground">Promedio duración</p>
+              <p className="font-semibold">{kpis.avg_duration_ms ? `${Math.round(kpis.avg_duration_ms / 1000)}s` : '-'}</p>
+            </div>
+            <div className="rounded-md border p-2">
               <p className="text-[11px] text-muted-foreground">Filas procesadas</p>
               <p className="font-semibold">{kpis.rows_processed ?? 0}</p>
+            </div>
+            <div className="rounded-md border p-2">
+              <p className="text-[11px] text-muted-foreground">Corridas (30d)</p>
+              <p className="font-semibold">{kpis.total_runs ?? 0}</p>
             </div>
           </div>
         )}
@@ -141,10 +181,16 @@ export function ReportRunsCard({ scope, departmentId = null, title = 'Reportes g
                   <p className="text-sm font-medium">
                     {format(new Date(item.created_at), "d 'de' MMM yyyy, HH:mm", { locale: es })}
                   </p>
-                  <span className="text-xs text-muted-foreground">{item.status}</span>
+                  {getStatusBadge(item.status)}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Periodo: {item.period_start} → {item.period_end} · Filas: {item.row_count ?? '-'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Duración: {item.duration_ms ? `${Math.round(item.duration_ms / 1000)}s` : '-'} · Reintentos: {item.retry_count ?? 0}
+                  {item.finished_at
+                    ? ` · Finalizó: ${format(new Date(item.finished_at), "d 'de' MMM yyyy, HH:mm", { locale: es })}`
+                    : ''}
                 </p>
                 {item.error && <p className="text-xs text-destructive">{item.error}</p>}
                 <Button
